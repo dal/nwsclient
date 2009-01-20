@@ -51,8 +51,12 @@ public class LocationData implements Persistable
 		_userAddress = "";
 	}
 	
-	public boolean equals(LocationData that)
+	public boolean equals(Object obj)
 	{
+		if (obj.getClass() != getClass())
+			return false;
+		
+		LocationData that = (LocationData)obj;
 		return (
 				that.getCountry().equals(_country) && 
 				that.getArea().equals(_area) && 
@@ -198,10 +202,10 @@ public class LocationData implements Persistable
 			try {
 				String tmpLon = coordinates.substring(0, firstCommaPos);
 				System.err.println("Lon string: "+tmpLon);
-				_lon = Double.parseDouble(tmpLon);
+				setLon(Double.parseDouble(tmpLon));
 				String tmpLat = coordinates.substring(firstCommaPos+1, secondCommaPos);
 				System.err.println("Lat string: "+tmpLat);
-				_lat = Double.parseDouble(tmpLat);
+				setLat(Double.parseDouble(tmpLat));
 			} catch (NumberFormatException e) {
 				System.err.println("Could not get lat/lon information");
 				throw new ParseError("Could not understand lat/lon data");
@@ -209,13 +213,5 @@ public class LocationData implements Persistable
 		} else {
 			throw new ParseError("Could not understand lat/lon data");
 		}
-	}
-	
-	public void getIcaoFromXml(Document document) throws ParseError
-	{
-		Element root = document.getDocumentElement();
-		String icao = XmlHelper.getValue(root, "ICAO");
-		System.err.println("Icao: "+icao);
-		_icao = icao;
 	}
 }
