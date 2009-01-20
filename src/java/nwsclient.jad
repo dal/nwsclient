@@ -1,0 +1,21 @@
+Manifest-Version: 1.0
+MIDlet-Version: 0.0
+MIDlet-Jar-Size: 22141
+MicroEdition-Configuration: CLDC-1.1
+MIDlet-Jar-URL: nwsclient.jar
+RIM-COD-Module-Dependencies: net_rim_cldc,net_rim_bb_framework_api,net_rim_xml_org,net_rim_bbapi_browser,net_rim_xml
+RIM-MIDlet-Flags-3: 0
+RIM-MIDlet-Flags-2: 0
+RIM-MIDlet-Flags-1: 0
+RIM-COD-Module-Name: nwsclient
+MIDlet-Name: nwsclient
+RIM-COD-Size: 65624
+RIM-COD-Creation-Time: 1232412892
+MIDlet-3: NWSClient,img/icon.png,gui
+MIDlet-2: NWSClient,,gui
+MIDlet-1: ,,
+RIM-COD-URL: nwsclient.cod
+MIDlet-Description: Gets the current weather and forecast from the US National Weather Service.
+RIM-COD-SHA1: dc f7 93 e3 8e d6 bc d6 69 ca 81 aa 80 d1 33 d4 a1 55 a9 f7
+MicroEdition-Profile: MIDP-2.0
+MIDlet-Vendor: <unknown>
