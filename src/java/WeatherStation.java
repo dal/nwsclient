@@ -31,10 +31,6 @@ public class WeatherStation extends Object
 	
 	public String getName() { return name; }
 	
-	public double getLat() { return lat; }
-	
-	public double getLon() { return lon; }
-	
 	public double getCoord(int axis) {
 		if (axis == 0)
 			return lat;
@@ -115,16 +111,6 @@ public class WeatherStation extends Object
 		ret.addElement(currentBest);
 		ret.addElement(new Double(bestDist));
 		return ret;
-	}
-	
-	public void delTree(WeatherStation root) {
-		if (root.left != null) {
-			delTree(root.left);
-		}
-		if (root.right != null) {
-			delTree(root.right);
-		}
-		root = null;
 	}
 	
 	public InputStream getList() throws IOException
