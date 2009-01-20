@@ -13,17 +13,18 @@ import net.rim.device.api.ui.container.PopupScreen;
 
 public class MessageScreen extends PopupScreen
 {
-	private String message;
+	private String _message;
 	
 	public MessageScreen (String message)
 	{
 		super( new HorizontalFieldManager(), Field.NON_FOCUSABLE);
-		this.message = message;
+		_message = message;
 		final BitmapField logo = new BitmapField(Bitmap.getBitmapResource("website_blue.png"));
 		logo.setSpace( 5, 5 );
 		add(logo);
 	
-		RichTextField rtf = new RichTextField(message, Field.FIELD_VCENTER | Field.NON_FOCUSABLE | Field.FIELD_HCENTER);
+		RichTextField rtf = new RichTextField(_message, 
+			Field.FIELD_VCENTER | Field.NON_FOCUSABLE | Field.FIELD_HCENTER);
 		rtf.setEditable( false );
 		
 		add(rtf);
