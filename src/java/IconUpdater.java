@@ -24,7 +24,7 @@ public class IconUpdater extends Thread
 	
 	public void setIcon()
 	{
-		System.err.println("Setting icon for "+_location.getCountry()+" "+_location.getArea()+" "+_location.getLocality());
+		//System.err.println("Setting icon for "+_location.getCountry()+" "+_location.getArea()+" "+_location.getLocality());
 		// Get our current temp
 		try {
 			Hashtable conditions = NwsClient.getParseCurrentConditions(_location);
