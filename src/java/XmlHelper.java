@@ -28,11 +28,11 @@ public class XmlHelper
 		Element rootEl = (Element)root;
 		
 		NodeList nl = rootEl.getElementsByTagName(tagName);
-		if (nl.getLength() > 0) {
-			return nl.item(0);
-		} else {
+		if (nl.getLength() <= 0) {
 			throw new ParseError("No "+tagName+" node in XML");
 		}
+		// Return the first element matching tagName
+		return nl.item(0);
 	}
 	
 	public static String getNodeText(Node node)
@@ -48,17 +48,20 @@ public class XmlHelper
 			}
 			return buffer.toString();
 		}
-		return new String("");
+		return "";
 	}
 	
 	public static String getElementData(Node root, String tagName) throws ParseError
 	{
 		Node myNode = getNode(root, tagName);
-		if (myNode.getNodeType() == Node.ELEMENT_NODE) {
-			Element el = (Element)myNode;
-			return el.getAttribute("data");
+		// getNode may return null if root node is invalid...
+		if (myNode != null) {
+			if (myNode.getNodeType() == Node.ELEMENT_NODE) {
+				Element el = (Element)myNode;
+				return el.getAttribute("data");
+			}
 		}
-		return new String("");
+		return "";
 	}
 	
 }
