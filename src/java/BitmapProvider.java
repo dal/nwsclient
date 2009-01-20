@@ -29,14 +29,6 @@ public class BitmapProvider extends Thread
 		_stop = true;
 	}
 	
-	public void reset()
-	{
-		synchronized(this) {
-			urls.removeAllElements();
-			fields.removeAllElements();
-		}
-	}
-	
 	public void getBitmap(String url, BitmapField field)
 	{
 		synchronized(this) {
@@ -91,6 +83,12 @@ public class BitmapProvider extends Thread
 	private void fetchBitmap(String url, final BitmapField field)
 	{
 		InputStream is = NwsClient.getUrl(url);
+		
+		if (is == null) {
+			System.err.println("Error fetching bitmap (inputStream null): "+url);
+			return;
+		}
+		
 		byte[] buff;
 		int len = 0;
 		try {
