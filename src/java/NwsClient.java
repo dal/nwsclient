@@ -194,13 +194,15 @@ public class NwsClient extends UiApplication
 			setRecentLocationsChoiceField();
 			_recentLocationsChoiceField.setChangeListener(new recentLocListener());
 			add(_recentLocationsChoiceField);
+			
 			String helpText = "\nValid locations include City, State (e.g. \"New "+
 				"York, NY\"); Airport Codes (e.g. \"JFK\"); zip code; "+
 				"or International City, Country (e.g. \"London, GB\" or "+
 				"\"Moscow\").\n National Weather Service forecast data is only "+
 				"available for the United States. For all other locations "+
 				"iGoogle weather data will be used.";
-			LabelField _helpLabel = new LabelField(helpText);
+			
+			RichTextField _helpLabel = new RichTextField(helpText, Field.NON_FOCUSABLE);
 			Font small = _helpLabel.getFont().derive(Font.PLAIN, 11);
 			_helpLabel.setFont(small);
 			add(_helpLabel);
@@ -217,13 +219,13 @@ public class NwsClient extends UiApplication
 		protected boolean keyChar(char key, int status, int time)
 		{
 			// UiApplication.getUiApplication().getActiveScreen().
-            if ( getLeafFieldWithFocus() == newLocField_ && key == Characters.ENTER ) {
+	    if ( getLeafFieldWithFocus() == newLocField_ && key == Characters.ENTER ) {
 				storeInterfaceValues();
-                _newLocationMenuItem.run();
-                return true; //I've absorbed this event, so return true
-            } else {
-                return super.keyChar(key, status, time);
-            }
+		_newLocationMenuItem.run();
+		return true; //I've absorbed this event, so return true
+	    } else {
+		return super.keyChar(key, status, time);
+	    }
 		}
 		
 		protected void setRecentLocationsChoiceField()
@@ -288,7 +290,8 @@ public class NwsClient extends UiApplication
 	 * Convenience method takes a string url and fetches an InputStream object.
 	 * <p>
 	 * Returns null if there's a problem fetching the url.
-	 * @param url The web url to fetch. 
+	 * @param url The web url to fetch.
+	 * @return    An inputStream of the requested URL's contents
 	 */
 	public static InputStream getUrl(String url)
 	{
@@ -331,6 +334,7 @@ public class NwsClient extends UiApplication
 	 * For any location--US or international--fetch the necessary url, parse the  
 	 * returned XML, and return a hashtable of current_conditions.
 	 * @param location A valid LocationData object
+	 * @return	   A hashtable of the current condition observations
 	 */
 	public static Hashtable getParseCurrentConditions(LocationData location) throws IOException, ParseError
 	{
@@ -561,7 +565,7 @@ public class NwsClient extends UiApplication
 		// implement the 'parse' method. Lame.
 		String part;
 		Calendar cal = Calendar.getInstance(); // new calendar object
-		//                       > 0123456789012345678901234 <
+		//			 > 0123456789012345678901234 <
 		// Time string looks like '2008-10-12T20:00:00-04:00'
 		// Year
 		part = timeStr.substring(0,4); // strip off the time zone information
@@ -681,7 +685,9 @@ public class NwsClient extends UiApplication
 	}
 
 		
-	private Hashtable getNDFDObservations(Element root, Hashtable times) {
+	private Hashtable getNDFDObservations(Element root, Hashtable times, 
+											final String[] observations) 
+	{
 		/*
 		fc = Hashtable(	 
 			'obsName' => Hashtable( 
@@ -694,7 +700,7 @@ public class NwsClient extends UiApplication
 		 )
 		*/
 		
-		// built up our hash of hashes
+		// build up our hash of hashes
 		Hashtable fc = new Hashtable();
 		
 		/*
@@ -703,13 +709,6 @@ public class NwsClient extends UiApplication
 			"conditions-icon", "hazards"
 		};
 		*/
-		
-		String[] observations = { 
-			"weather", 
-			"temperature",
-			"conditions-icon",
-			"probability-of-precipitation"
-		};
 		
 		for (int h=0; h < observations.length; h++) {
 			String obsName = observations[h];
@@ -856,7 +855,7 @@ public class NwsClient extends UiApplication
 		return cc;
 	}
 	
-	private Hashtable parseNDFD(InputStream is) 
+	private Hashtable parseNDFD(InputStream is, final String[] observations) 
 	{
 		Hashtable fc = new Hashtable();
 		
@@ -867,11 +866,11 @@ public class NwsClient extends UiApplication
 				
 			Element root = document.getDocumentElement();
 			
-			// Parse the times legend and get the 
+			// Parse the times legend 
 			Hashtable times = getNDFDTimeSeries(document);
 			
 			// Get forecast values...
-			fc = getNDFDObservations(root, times);
+			fc = getNDFDObservations(root, times, observations);
 			
 		} catch (ParserConfigurationException pce) {
 			throw new RuntimeException(pce.toString());
@@ -929,7 +928,7 @@ public class NwsClient extends UiApplication
 		String dewpoint = (String)weather.get("dewpoint");
 		String heat_index = (String)weather.get("heat_index");
 		String windchill = (String)weather.get("windchill");
-		String vis = (String)weather.get("visiblity");
+		String vis = (String)weather.get("visibility");
 		
 		// Grab some fonts...
 		FontFamily fontfam[] = FontFamily.getFontFamilies();
@@ -987,7 +986,7 @@ public class NwsClient extends UiApplication
 							"Relative humidity", humidity, "Wind", wind, 
 							"Barometric pressure", pressure,
 							"Dewpoint", dewpoint, "Heat Index", heat_index,
-							"Windchill", windchill, "Visibility", vis
+							"Windchill", windchill, "Visibility", (vis + " miles")
 							};
 		for (int i=0; i < fields.length; i++) {
 			LabelField fld;
@@ -997,7 +996,7 @@ public class NwsClient extends UiApplication
 				fld.setFont(tinyFont);
 				btLeftCol.add(fld);
 			} else {
-				fld = new LabelField(fields[i],  Field.FIELD_RIGHT);
+				fld = new LabelField(fields[i],	 Field.FIELD_RIGHT);
 				fld.setFont(tinyFont);
 				btRightCol.add(fld);
 			}
@@ -1087,7 +1086,7 @@ public class NwsClient extends UiApplication
 				fld.setFont(tinyFont);
 				btLeftCol.add(fld);
 			} else {
-				fld = new LabelField(fields[i],  Field.FIELD_RIGHT);
+				fld = new LabelField(fields[i],	 Field.FIELD_RIGHT);
 				fld.setFont(tinyFont);
 				btRightCol.add(fld);
 			}
@@ -1163,21 +1162,21 @@ public class NwsClient extends UiApplication
 	 * forecast data for all available days. 
 	 * Hashtable(
 	 *  'currentConditions' => Hashtable(
-	 *                          'weather' => "Partly Cloudy"
-	 *                          'temperature' => "45" . . .
-	 *                         )
+	 *			    'weather' => "Partly Cloudy"
+	 *			    'temperature' => "45" . . .
+	 *			   )
 	 *  'forecast' => Vector( Hashtable(
-	 *                                  'day_of_week' => 'Sat'
-	 *                                  'weather' => "Rain"
-	 *                                  'temperature' => "50"
-	 *                                  'conditions-icon' => "http..."
-	 *                                  'wind' => "Wind: W at 10mph" 
-	 *                         )
+	 *				    'day_of_week' => 'Sat'
+	 *				    'weather' => "Rain"
+	 *				    'temperature' => "50"
+	 *				    'conditions-icon' => "http..."
+	 *				    'wind' => "Wind: W at 10mph" 
+	 *			   )
 	 *
 	 * @param is An inputStream from google 
 	 */
 	private static Hashtable parseGoogleWeather(final InputStream is) throws ParseError
-	{                     	 
+	{			 
 		Hashtable gw = new Hashtable();
 		try {
 			DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -1250,15 +1249,17 @@ public class NwsClient extends UiApplication
 	
 	/** 
 	 * Connects to GOOGLE_WEATHER_URL and grabs the xml file for a location's 
-	 * current conditions and weather information. Returns a formatted weather 
-	 * conditions and forecast hashtable.
+	 * current conditions and weather information. Unlike NOAA Google returns 
+	 * the current conditions and the forecast data all in one go.
+	 * <p>
+	 * Returns a formatted weather conditions and forecast hashtable.
 	 * <p>
 	 * Since the icon updater thread may also be loading Google weather this 
 	 * function will cache the last retrieved Google weather and only re-fetch
 	 * if from the web if the specified UPDATE_INTERVAL has not yet passed. 
 	 * 
 	 * @param location The LocationData representing the location for which to 
-	 *                 grab the weather information.
+	 *		   grab the weather information.
 	 * 
 	 */
 	public static Hashtable getGoogleWeather(final LocationData location) throws ParseError
@@ -1292,11 +1293,19 @@ public class NwsClient extends UiApplication
 	 * When given a location this method will both fetch and display the NWS 
 	 * NDFD by-day forecast.  
 	 *
-	 * @param 
+	 * @param location The LocationData object for which to display the forecast 
 	 *
 	 */
 	private void getDisplayNWSForecast(final LocationData location)
 	{
+		// The forecast observations we're interested in...
+		final String[] observations = { 
+			"weather", 
+			"temperature",
+			"conditions-icon",
+			"probability-of-precipitation"
+		};
+		
 		// get NWS Weather
 		final URLEncodedPostData post = new URLEncodedPostData(null, true);
 		//post.append("whichClient", "NDFD");
@@ -1313,7 +1322,7 @@ public class NwsClient extends UiApplication
 			
 				if (is != null) {
 					try {
-						Vector flattened = flattenNDFD(parseNDFD(is));
+						Vector flattened = flattenNDFD(parseNDFD(is, observations));
 						is.close();
 						displayForecast(location, flattened);
 						//displayNDFDByDay(location, parsed);
@@ -1326,6 +1335,11 @@ public class NwsClient extends UiApplication
 		});
 	}
 	
+	/**
+	 * When passed a LocationData object fetches and displays the NDFD forecast
+	 * data for the requested location.
+	 * @param location The LocationData object for which to get the forecast
+	 */
 	private void getDisplayNWSCurrentConditions(final LocationData location)
 	{
 		if (location.getIcao().equals("")) {
@@ -1348,6 +1362,14 @@ public class NwsClient extends UiApplication
 		}
 	}
 	
+	/**
+	 * This method does most of the work. It chooses whether to get Google 
+	 * weather or National Weather Service NDFD data and displays it on the 
+	 * screen. It displays the current conditions for the location at the top
+	 * with the full forecast beneath it (by day for Google, by 12 hour period 
+	 * for the NDFD data).
+	 * @param location The Location for which to display the weather information
+	 */
 	private synchronized void getDisplayWeather(final LocationData location) 
 	{
 		resetThreads(); // reset the bitmapProvider
@@ -1383,6 +1405,11 @@ public class NwsClient extends UiApplication
 		}
 	}
 	
+	/**
+	 * Store a new location to the runtime store so the application icon updater
+	 * is aware of changes to the current location.
+	 * @param location The new LocationData object to store
+	 */
 	private void storeLocation(LocationData location)
 	{
 		googleWeather = null; // clear out cached google weather...
