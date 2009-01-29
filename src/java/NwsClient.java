@@ -15,6 +15,7 @@ import net.rim.device.api.ui.component.*;
 import net.rim.device.api.ui.component.ChoiceField.*;
 import net.rim.device.api.system.RuntimeStore.*;
 import net.rim.blackberry.api.homescreen.*; // for updating the application icon
+import net.rim.device.api.i18n.SimpleDateFormat.*;
 import javax.microedition.io.*;
 import java.util.*;
 import java.io.*;
@@ -52,18 +53,15 @@ public class NwsClient extends UiApplication
 	
 	private static final int UPDATE_INTERVAL = 3600000; // one hour in milliseconds
 	
-	private static Hashtable googleWeather;
-	
-	private static IconUpdater iconUpdater;
-		
 	private static PersistentObject store;
 	
 	private static NwsClientOptions options;
 
 	// Instance variables
 	
-	// Last time the weather information was updated
-	private long lastUpdated = 0;
+	private Thread workerThread_;
+
+	private LocationFinder locationFinder_;
 	
 	private BitmapProvider bitmapProvider_;
 	
@@ -71,7 +69,9 @@ public class NwsClient extends UiApplication
 	
 	private OptionsScreen optionsScreen_;
 	
-	private EditField newLocField_; 
+	private EditField newLocField_;
+	
+	private boolean foreground_ = false;
 	
 	/**
 	 * Initialize or reload our persistent store
@@ -124,13 +124,13 @@ public class NwsClient extends UiApplication
 		 */
 		public NwsClientScreen()
 		{
-			// empty constructor
+			setTitle(new LabelField("NWSClient", LabelField.USE_ALL_WIDTH));
 		}
 		
 		protected void makeMenu(Menu menu, int instance)
 		{
 			menu.add(optionsMenuItem_);
-			menu.add(_refreshMenuItem);
+			menu.add(refreshMenuItem_);
 			menu.addSeparator();
 			super.makeMenu(menu, instance);
 		}
@@ -138,6 +138,25 @@ public class NwsClient extends UiApplication
 		public boolean onClose()
 		{
 			return super.onClose();
+		}
+		
+		protected boolean keyChar(char key, int status, int time)
+		{
+			if (key == Characters.LATIN_SMALL_LETTER_U ) {
+				scroll(Manager.UPWARD);
+				return true; //I've absorbed this event, so return true
+			} else if (key == Characters.SPACE ) {
+				scroll(Manager.DOWNWARD);
+				return true; //I've absorbed this event, so return true
+			} else if (key == Characters.LATIN_SMALL_LETTER_T ) {
+				scroll(Manager.TOPMOST);
+				return true; //I've absorbed this event, so return true
+			} else if (key == Characters.LATIN_SMALL_LETTER_B ) {
+				scroll(Manager.BOTTOMMOST);
+				return true; //I've absorbed this event, so return true
+			} else {
+				return super.keyChar(key, status, time);
+		}
 		}
 		
 	};
@@ -159,16 +178,15 @@ public class NwsClient extends UiApplication
 					//Dialog.alert("Location selected: " + (String)ocf.getChoice(idx));
 					Vector locations = options.getLocations();
 					if (idx < locations.size()) {
-						LocationData newLoc = (LocationData)locations.elementAt(idx);
+						final LocationData newLoc = (LocationData)locations.elementAt(idx);
 						options.setCurrentLocation(newLoc);
-						//optionsScreen_.save();
 						optionsScreen_.storeInterfaceValues();
 						if (optionsScreen_.isDisplayed())
 							optionsScreen_.close();
 						
 						// Tell the icon updater about the new location
 						storeLocation(newLoc);
-						getDisplayWeather(newLoc);
+						refreshWeather();
 					}
 				} catch (ClassCastException ce) {
 					// ...
@@ -182,7 +200,7 @@ public class NwsClient extends UiApplication
 		public OptionsScreen()
 		{
 			super();
-			LabelField title = new LabelField("Weather Options", 
+			LabelField title = new LabelField("NWSClient Options", 
 				LabelField.ELLIPSIS | LabelField.USE_ALL_WIDTH);
 			setTitle(title);
 			newLocField_ = new EditField("Location: ", null, Integer.MAX_VALUE, EditField.FILTER_DEFAULT);
@@ -196,8 +214,8 @@ public class NwsClient extends UiApplication
 			add(_recentLocationsChoiceField);
 			
 			String helpText = "\nValid locations include City, State (e.g. \"New "+
-				"York, NY\"); Airport Codes (e.g. \"JFK\"); zip code; "+
-				"or International City, Country (e.g. \"London, GB\" or "+
+				"York, NY\"); airport codes (e.g. \"JFK\"); zip code; "+
+				"or international City, Country (e.g. \"London, GB\" or "+
 				"\"Moscow\").\n National Weather Service forecast data is only "+
 				"available for the United States. For all other locations "+
 				"iGoogle weather data will be used.";
@@ -219,13 +237,13 @@ public class NwsClient extends UiApplication
 		protected boolean keyChar(char key, int status, int time)
 		{
 			// UiApplication.getUiApplication().getActiveScreen().
-	    if ( getLeafFieldWithFocus() == newLocField_ && key == Characters.ENTER ) {
+			if ( getLeafFieldWithFocus() == newLocField_ && key == Characters.ENTER ) {
 				storeInterfaceValues();
-		_newLocationMenuItem.run();
-		return true; //I've absorbed this event, so return true
-	    } else {
-		return super.keyChar(key, status, time);
-	    }
+				_newLocationMenuItem.run();
+				return true; //I've absorbed this event, so return true
+			} else {
+				return super.keyChar(key, status, time);
+		}
 		}
 		
 		protected void setRecentLocationsChoiceField()
@@ -259,10 +277,206 @@ public class NwsClient extends UiApplication
 		public void save()
 		{
 			if (storeInterfaceValues())
-				refreshWeather(true); // refresh with force
+				refreshWeather(); // refresh
 		}
 		
 	};
+	
+	class IconUpdaterThread extends Thread
+	{
+		private LocationData location_ = null;
+		
+		IconUpdaterThread()
+		{
+			// empty constructor
+		}
+		
+		public synchronized void setLocation(LocationData loc)
+		{
+			location_ = loc;
+		}
+		
+		public void doUpdateIcon()
+		{
+			//System.err.println("Setting icon for "+location_.getCountry()+" "+location_.getArea()+" "+location_.getLocality());
+			// Get our current temp
+			try {
+				Hashtable conditions = getParseCurrentConditions(location_);
+				if (conditions != null && conditions.containsKey("temperature")) {
+					String temp = (String)conditions.get("temperature");
+					updateIcon(temp, 1);
+				} else {
+					System.err.println("Error getting icon current conditions: null current conditions");
+				}
+			} catch (ParseError pe) {
+				System.err.println("Error parsing current conditions: "+pe.toString());
+			} catch (Exception e) {
+				System.err.println("Error getting icon current conditions: " + e.toString());
+			}
+			
+		}
+		
+		public void run()
+		{
+			for(;;) {
+				try {
+					// Check for a new location coming in...
+					LocationData newLoc = (LocationData)RuntimeStore.getRuntimeStore().get( ID );
+					// If there's any change to the location (including update) re-fetch it
+					if (newLoc != null && (newLoc != location_ 
+						|| newLoc.getLastUpdated() != location_.getLastUpdated())) {
+						synchronized(this) {
+							setLocation(newLoc);
+						}
+					}
+					
+					if (location_ == null) {
+						sleep(4000);
+						continue;
+					}
+					
+					// Time to update?
+					long now = System.currentTimeMillis();
+					long thisInterval = now - location_.getLastUpdated();
+					
+					//System.err.println("Interval is "+thisInterval+" for "+
+					//	location_.getCountry()+" "+location_.getArea()+
+					//	" "+location_.getLocality());
+					
+					if (thisInterval >= UPDATE_INTERVAL) {
+						doUpdateIcon();
+						location_.setLastUpdated(now);
+					} else {
+						// Wait four seconds
+						sleep(4000);
+					}
+				} catch (InterruptedException ie) {
+					return;
+				}
+			}
+		}
+		
+	}
+	
+	class WorkerThread extends Thread
+	{
+		boolean stop_ = false;
+		
+		WorkerThread()
+		{
+			// do nothing
+		}
+		
+		public void run()
+		{
+			for(;;) {
+				
+				if (stop_)
+					return;
+				
+				final long now = System.currentTimeMillis();
+				final LocationData location = options.getCurrentLocation();
+				if (location != null && (now - location.getLastUpdated()) > UPDATE_INTERVAL) {
+					getDisplayWeather(location);
+					setLastUpdated(now);
+				} else {
+					try {
+						sleep(1000); // sleep for a second...
+					} catch (InterruptedException e) {
+						System.err.println(e.toString());
+						return;
+					}
+				}
+			}
+		}
+		
+		public void stop()
+		{
+			stop_ = true;
+		}
+		
+	}
+	
+	class LocationFinder extends Thread
+	{
+		String input_ = null;
+		boolean start_ = false;
+		boolean stop_ = false;
+		
+		public void find(String userAddress)
+		{
+			if ( start_ ) {
+				Dialog.alert("Already finding location");
+				synchronized(this) {
+					input_ = userAddress;
+				}
+			} else {
+				synchronized(this) {
+					if (start_) {
+						Dialog.alert("Already finding location");	
+					} else {
+						start_ = true;
+						input_ = userAddress;
+					}
+				}
+			}
+		}
+		
+		public void run()
+		{
+			for (;;) {
+				while (!start_ && !stop_) {
+					try {
+						sleep(1000); 
+					} catch (InterruptedException e) {
+						System.err.println(e.toString());
+						return;
+					}
+					
+					if (stop_) {
+						return;
+					}
+					
+					synchronized(this) {
+						if (start_ && input_ != null) {
+							UiApplication.getUiApplication().invokeLater(new Runnable() {
+								public void run() {
+									final MessageScreen msgScreen = new MessageScreen("Getting location...");
+									pushScreen(msgScreen);
+								}
+							});
+							final LocationData newLoc = getLocationData(input_);
+							if (newLoc.getCountry().equals("US")) {
+								// Get the ID of the weather station...
+								findNearestWeatherStation(newLoc);
+							}
+							
+							UiApplication.getUiApplication().invokeLater(new Runnable() {
+								public void run() {
+									// Remove the getting location message...
+									UiApplication.getUiApplication().popScreen(UiApplication.getUiApplication().getActiveScreen());
+								}
+							});
+							
+							if (newLoc != null) {
+								UiApplication.getUiApplication().invokeLater(new Runnable() {
+									public void run() {
+										if (optionsScreen_.isDisplayed())
+											optionsScreen_.close();
+									}
+								});
+								options.setCurrentLocation(newLoc);
+								storeLocation(newLoc);
+								refreshWeather();
+							}
+							start_ = false;
+						}
+					}
+				}
+			}
+		}
+		
+	}
 	
 	// STATIC METHODS
 	
@@ -295,7 +509,7 @@ public class NwsClient extends UiApplication
 	 */
 	public static InputStream getUrl(String url)
 	{
-		//System.err.println("Fetching url "+url);
+		System.err.println("Fetching url "+url);
 		StreamConnection s = null;
 		InputStream is = null;
 		int rc;
@@ -311,7 +525,7 @@ public class NwsClient extends UiApplication
 				is = httpConn.openInputStream();
 				
 				// pass the stream on to the supplied handler
-				//handler.handleInputStream(is);
+				//handler.handleIn  putStream(is);
 				return is;
 			} else {
 				System.err.println("Error fetching url. Status: "+status);
@@ -330,19 +544,36 @@ public class NwsClient extends UiApplication
 		
 	}
 	
+	public static void updateIcon(String temp, int whichApp)
+	{
+		int lOffset = 22;
+		if (temp.length() >= 3) 
+			lOffset = 20;
+		if (temp.length() > 3)
+			temp = "NWS";
+		Bitmap bg = Bitmap.getBitmapResource("icon.png");
+		Graphics gfx = new Graphics(bg);
+		FontFamily fontfam[] = FontFamily.getFontFamilies();
+		Font smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, 12);
+		gfx.setFont(smallFont);
+		gfx.drawText(temp, lOffset, 12);
+		HomeScreen.updateIcon(bg, 1);
+	}
+	
 	/**
 	 * For any location--US or international--fetch the necessary url, parse the  
 	 * returned XML, and return a hashtable of current_conditions.
 	 * @param location A valid LocationData object
 	 * @return	   A hashtable of the current condition observations
 	 */
-	public static Hashtable getParseCurrentConditions(LocationData location) throws IOException, ParseError
+	public Hashtable getParseCurrentConditions(LocationData location) throws IOException, ParseError
 	{
-		Hashtable parsed = null;
+		Hashtable parsed = new Hashtable();
 		if (location.getCountry().equals("US") && options.useNws()) {
+			// USA / NWS
 			
 			if (location.getIcao().equals(""))
-				return null;
+				throw new RuntimeException("Could not get nearest weather station");
 			
 			InputStream is = getUrl(NWS_CURRENT_URL+location.getIcao()+".xml");
 			
@@ -357,8 +588,11 @@ public class NwsClient extends UiApplication
 				}
 			}
 		} else {
+			// International / Google
 			Hashtable gw = getGoogleWeather(location);
-			parsed = (Hashtable)gw.get("current_conditions");
+			if (gw != null && gw.containsKey("current_conditions")) {
+				parsed = (Hashtable)gw.get("current_conditions");
+			}
 		}
 		return parsed;
 	}
@@ -367,70 +601,79 @@ public class NwsClient extends UiApplication
 	
 	// constructor
 	public NwsClient(boolean autostart)
-	{
+	{	
 		if (autostart) {
+			foreground_ = false;
 			//System.err.println("NWSClient: In autostart");
 			//alternate entry point
-			invokeLater(new Runnable() {
-				public void run() {
-					ApplicationManager myApp = ApplicationManager.getApplicationManager();
-					boolean keepGoing = true;
-					while(keepGoing) {
-						if (myApp.inStartup()) {
-							//The BlackBerry is still starting up, sleep for 1 second.
-							//System.err.println("autostart sleeping...");
-							try {
-								Thread.sleep(1000);
-							} catch (Exception ex) {
-								System.err.println("Error sleeping entry thread: "+ex.toString());
-							}
-						} else {
-							keepGoing = false;
-							// Start the icon updater thread
-							startIconUpdater();
-						}
+			ApplicationManager myApp = ApplicationManager.getApplicationManager();
+			boolean keepGoing = true;
+			while(keepGoing) {
+				if (myApp.inStartup()) {
+					//The BlackBerry is still starting up, sleep for 1 second.
+					//System.err.println("autostart sleeping...");
+					try {
+						Thread.sleep(1000);
+					} catch (Exception ex) {
+						System.err.println("Error sleeping entry thread: "+ex.toString());
 					}
+				} else {
+					keepGoing = false;
+					// Start the icon updater thread
+					// disabled for now -- debug debug!
+					if (options.getCurrentLocation() != null) {
+						storeLocation(options.getCurrentLocation());
+					}
+					IconUpdaterThread iup = new IconUpdaterThread();
+					workerThread_ = iup;
+					if (options.getCurrentLocation() != null) {
+						options.getCurrentLocation().setLastUpdated(0);
+						iup.setLocation(options.getCurrentLocation());
+					}
+					iup.start();
 				}
-			} );
+			}
 		} else {
+			foreground_ = true;
+			requestForeground();
 			// started by the user
 			mainScreen_ = new NwsClientScreen();
-			mainScreen_.setTitle(new LabelField("NWS Weather", LabelField.USE_ALL_WIDTH));
-			
 			pushScreen(mainScreen_);
 			
-			invokeLater(new Runnable() {
-				public void run() {
-					refreshWeather(false);
-				}
-			}, 4000, true);
+			this.workerThread_ = this.new WorkerThread();
+			this.workerThread_.start();
+			
+			this.locationFinder_ = this.new LocationFinder();
+			this.locationFinder_.start();
 			
 			// if no location go to the options screen
-			if (options.getCurrentLocation() == null) {
-				viewOptions();
+			if (options.getCurrentLocation() != null) {
+				refreshWeather();
 			} else {
-				getDisplayWeather(options.getCurrentLocation());
+				viewOptions();
 			}
 		}
 	}
 	
-	private synchronized void refreshWeather(boolean force)
+	protected boolean acceptsForeground()
 	{
-		LocationData location = options.getCurrentLocation();
-		long now = new Date().getTime();
-		if (location != null && (force || (now - lastUpdated) > UPDATE_INTERVAL))
-			getDisplayWeather(location);
+		return foreground_;
 	}
 	
-	private void startIconUpdater()
+	private synchronized void refreshWeather()
 	{
-		// If we have a location then get the temperature
-		if (options.getCurrentLocation() != null) {
-			storeLocation(options.getCurrentLocation());
+		setLastUpdated(0);
+	}
+	
+	private synchronized void setLastUpdated(long lastUpdated)
+	{
+		// This will effectively notify the Icon Updater thread that we've updated
+		LocationData loc = options.getCurrentLocation();
+		if (loc != null) {
+			loc.setLastUpdated(lastUpdated);
+			// Store the new location to let the icon updater thread know we're in control
+			storeLocation(loc);
 		}
-		// The icon updater will periodically update the application icon
-		iconUpdater = new IconUpdater();
-		iconUpdater.start();
 	}
 	
 	private void resetThreads()
@@ -454,14 +697,14 @@ public class NwsClient extends UiApplication
 	private MenuItem optionsMenuItem_ = new MenuItem("Options", 110, 10) {
 		public void run()
 		{
-			NwsClient.this.viewOptions();
+			viewOptions();
 		}
 	};
 	
-	private MenuItem _refreshMenuItem = new MenuItem("Refresh", 110, 10) {
+	private MenuItem refreshMenuItem_ = new MenuItem("Refresh", 110, 10) {
 		public void run()
 		{
-			NwsClient.this.refreshWeather(true);
+			refreshWeather();
 		}
 	};
 	
@@ -535,28 +778,7 @@ public class NwsClient extends UiApplication
 	
 	private void setNewLocation(final String userAddress)
 	{
-		MessageScreen msgScreen = new MessageScreen("Getting location...");
-		pushScreen(msgScreen);
-		invokeLater(new Runnable() {
-			public void run() {
-				LocationData newLoc = getLocationData(userAddress);
-				lastUpdated = 0;
-				if (newLoc.getCountry().equals("US")) {
-					// Get the ID of the weather station...
-					findNearestWeatherStation(newLoc);
-				}
-				
-				// Lost the getting location message...
-				UiApplication.getUiApplication().popScreen(UiApplication.getUiApplication().getActiveScreen());
-				if (newLoc != null) {
-					options.setCurrentLocation(newLoc);
-					if (optionsScreen_.isDisplayed())
-						optionsScreen_.close();
-					storeLocation(newLoc);
-					getDisplayWeather(newLoc);
-				}
-			}
-		});
+		locationFinder_.find(userAddress);
 	}
 	
 	private Calendar parseTime(String timeStr)
@@ -806,7 +1028,7 @@ public class NwsClient extends UiApplication
 		return fc;
 	}
 	
-	private static Hashtable parseUSCurrentConditions(InputStream is)
+	private static Hashtable parseUSCurrentConditions(InputStream is) throws ParseError
 	{
 		Hashtable cc = new Hashtable();
 		try {
@@ -843,8 +1065,7 @@ public class NwsClient extends UiApplication
 								XmlHelper.getValue(root, "icon_url_name");
 			cc.put("icon_url", iconUrl);
 		} catch (ParseError pe) {
-			System.err.println(pe.toString());
-			return null;
+			throw new ParseError(pe.toString());
 		} catch (ParserConfigurationException pce) {
 			throw new RuntimeException(pce.toString());
 		} catch (SAXException se) {
@@ -904,7 +1125,6 @@ public class NwsClient extends UiApplication
 		// delete everyone from this manager
 		popScreen(mainScreen_);
 		mainScreen_ = new NwsClientScreen();
-		mainScreen_.setTitle(new LabelField("NWS Weather", LabelField.USE_ALL_WIDTH));
 		pushScreen(mainScreen_);
 	}
 	
@@ -972,37 +1192,34 @@ public class NwsClient extends UiApplication
 		topRightCol.add(new RichTextField(conditionsLabel));
 		topRightCol.add(new RichTextField("Temp: "+temp));
 		
-		HorizontalFieldManager btHField = new HorizontalFieldManager(Manager.USE_ALL_WIDTH);
-		main.add(btHField);
-		
-		// Bottom left col
-		VerticalFieldManager btLeftCol = new VerticalFieldManager();
-		
-		// Bottom right col
-		VerticalFieldManager btRightCol = new VerticalFieldManager(Manager.USE_ALL_WIDTH);
-		
-		
 		String fields[] = { 
 							"Relative humidity", humidity, "Wind", wind, 
 							"Barometric pressure", pressure,
 							"Dewpoint", dewpoint, "Heat Index", heat_index,
 							"Windchill", windchill, "Visibility", (vis + " miles")
 							};
+		HorizontalFieldManager row = null;
 		for (int i=0; i < fields.length; i++) {
-			LabelField fld;
 			
+			LabelField fld;
 			if (i==0 || i%2 == 0) {
-				fld = new LabelField(fields[i], (Field.FIELD_LEFT | Field.FOCUSABLE));
+				row = new HorizontalFieldManager(Manager.USE_ALL_WIDTH);
+				main.add(row);
+				VerticalFieldManager leftCol = new VerticalFieldManager(); 
+				row.add(leftCol);
+				fld = new LabelField(fields[i], Field.FIELD_LEFT | Field.FOCUSABLE);
 				fld.setFont(tinyFont);
-				btLeftCol.add(fld);
+				leftCol.add(fld);
 			} else {
-				fld = new LabelField(fields[i],	 Field.FIELD_RIGHT);
+				VerticalFieldManager rightCol = new VerticalFieldManager(Manager.USE_ALL_WIDTH);
+				row.add(rightCol);
+				fld = new LabelField(fields[i],	 Field.FIELD_RIGHT | Field.FOCUSABLE);
 				fld.setFont(tinyFont);
-				btRightCol.add(fld);
+				rightCol.add(fld);
 			}
 		}
-		btHField.add(btLeftCol);
-		btHField.add(btRightCol);
+		
+		//btVField.add(btRightCol);
 		main.add(new SeparatorField());
 		
 	}
@@ -1108,7 +1325,7 @@ public class NwsClient extends UiApplication
 	 * @param forecast The forecast Vector object (see above)
 	 *
 	 */
-	private void displayForecast(LocationData location, Vector forecast)
+	private void displayForecast(LocationData location, Vector forecast, String credit)
 	{
 		for (int i=0; i < forecast.size(); i++) {
 			
@@ -1118,10 +1335,10 @@ public class NwsClient extends UiApplication
 			String condition = (String)day.get("condition");
 			String temperature = (String)day.get("temperature");
 			
-			String pop = null;
+			String precip = null;
 			if (day.get("probability-of-precipitation") != null) {
 				// Only NWS supplies probability of precipitation
-				pop = (String)day.get("probability-of-precipitation");
+				precip = (String)day.get("probability-of-precipitation");
 			}
 			String iconUrl = (String)day.get("icon_url");
 			
@@ -1150,10 +1367,24 @@ public class NwsClient extends UiApplication
 			// Show the observations
 			rightCol.add(new RichTextField(condition));
 			rightCol.add(new RichTextField(temperature));
-			if (pop != null)
-				rightCol.add(new RichTextField(pop));
+			if (precip != null)
+				rightCol.add(new RichTextField(precip));
 			mainScreen_.add(new SeparatorField());
 		}
+		displayCredit(credit, location.getLastUpdated());
+	}
+	
+	private void displayCredit(final String who, final long when)
+	{
+		DateFormat dateFormat = new SimpleDateFormat("H:mma E, MMM d, yyyy");
+		Date lastUpdate = new Date(when); 
+		String formattedDate = dateFormat.format(lastUpdate, new StringBuffer(), null).toString();
+		String credit = "Downloaded at "+formattedDate+
+						"\nfrom "+who+".";
+		RichTextField creditField = new RichTextField(credit);
+		Font small = creditField.getFont().derive(Font.PLAIN, 11);
+		creditField.setFont(small);
+		mainScreen_.add(creditField);
 	}
 	
 	/**
@@ -1234,6 +1465,7 @@ public class NwsClient extends UiApplication
 				// there was a problem...
 				throw new ParseError("Google weather returned no data");
 			}
+			is.close();
 			
 		} catch(ParseError pe) {
 			throw new ParseError(pe.toString());
@@ -1253,39 +1485,22 @@ public class NwsClient extends UiApplication
 	 * the current conditions and the forecast data all in one go.
 	 * <p>
 	 * Returns a formatted weather conditions and forecast hashtable.
-	 * <p>
-	 * Since the icon updater thread may also be loading Google weather this 
-	 * function will cache the last retrieved Google weather and only re-fetch
-	 * if from the web if the specified UPDATE_INTERVAL has not yet passed. 
+	 * <p> 
 	 * 
 	 * @param location The LocationData representing the location for which to 
 	 *		   grab the weather information.
 	 * 
 	 */
 	public static Hashtable getGoogleWeather(final LocationData location) throws ParseError
-	{
-		Date now = new Date();
-		if (googleWeather != null && googleWeather.containsKey("lastUpdate")) {
-			Date updated = (Date)googleWeather.get("lastUpdate");
-			if (updated.getTime() > (now.getTime() - UPDATE_INTERVAL)) {
-				return googleWeather;
-			}
-		}
-		
+	{	
 		// Get some new Google weather
 		URLEncodedPostData post = new URLEncodedPostData(null, true);
 		//post.append("weather", location.getUserAddress());
 		post.append("weather", location.getLocality()+", "+location.getCountry());
 		post.append("hl", "en");
 		InputStream is = getUrl(GOOGLE_WEATHER_URL+"?"+post.toString());
-		try {
-			googleWeather = parseGoogleWeather(is);
-			is.close();
-			googleWeather.put("lastUpdate", now);
-		} catch (IOException ioe) {
-			// choose a more specific address?
-			throw new RuntimeException(ioe.toString());
-		}
+		Hashtable googleWeather = null;
+		googleWeather = parseGoogleWeather(is);
 		return googleWeather;
 	}
 	
@@ -1315,24 +1530,27 @@ public class NwsClient extends UiApplication
 		post.append("lon", Double.toString(location.getLon()));
 		post.append("numDays", "7"); // get a week
 		
-		invokeLater(new Runnable() {
-			public void run() {
-				InputStream is = getUrl(NWS_URL+"?"+post.toString());
-				System.err.println("Weather url: "+NWS_URL+"?"+post.toString());
-			
-				if (is != null) {
-					try {
-						Vector flattened = flattenNDFD(parseNDFD(is, observations));
-						is.close();
-						displayForecast(location, flattened);
-						//displayNDFDByDay(location, parsed);
-					} catch (IOException ioe) {
-						// choose a more specific address?
-						Dialog.alert("Error getting weather informtion: "+ioe.toString());
+		InputStream is = getUrl(NWS_URL+"?"+post.toString());
+		System.err.println("Weather url: "+NWS_URL+"?"+post.toString());
+	
+		if (is != null) {
+			try {
+				final Vector flattened = flattenNDFD(parseNDFD(is, observations));
+				is.close();
+				UiApplication.getUiApplication().invokeLater(new Runnable() {
+					public void run()
+					{
+						displayForecast(location, flattened, 
+						"The National Oceanic and Atmospheric Administration"
+						);
 					}
-				}
+				});
+				//displayNDFDByDay(location, parsed);
+			} catch (IOException ioe) {
+				// choose a more specific address?
+				Dialog.alert("Error getting weather informtion: "+ioe.toString());
 			}
-		});
+		}
 	}
 	
 	/**
@@ -1347,18 +1565,26 @@ public class NwsClient extends UiApplication
 			return;
 		}
 		
-		Hashtable parsed;
 		try {
-			parsed = getParseCurrentConditions(location);
-			//updateIcon((String)parsed.get("temp_f"));
-			displayNWSCurrentConditions(location, parsed);
-		} catch (IOException ioe) {
+			final Hashtable parsed = getParseCurrentConditions(location);
+			if (parsed != null && parsed.containsKey("temperature")) {
+				updateIcon((String)parsed.get("temperature"), 0);
+			}
+			UiApplication.getUiApplication().invokeLater(new Runnable() {
+				public void run()
+				{
+					displayNWSCurrentConditions(location, parsed);
+				}
+			});
+		} catch (Exception ioe) {
 			// choose a more specific address?
-			LabelField errorLabel = new LabelField("Error getting current conditions: "+ioe.getMessage());
-			mainScreen_.add(errorLabel);
-		} catch (ParseError pe) {
-			LabelField errorLabel = new LabelField("Error getting current conditions: "+pe.getMessage());
-			mainScreen_.add(errorLabel);
+			final String msg = ioe.getMessage();
+			UiApplication.getUiApplication().invokeLater(new Runnable() {
+				public void run() {
+					LabelField errorLabel = new LabelField("Error getting current conditions: "+msg);
+					mainScreen_.add(errorLabel);
+				}
+			});
 		}
 	}
 	
@@ -1373,14 +1599,25 @@ public class NwsClient extends UiApplication
 	private synchronized void getDisplayWeather(final LocationData location) 
 	{
 		resetThreads(); // reset the bitmapProvider
-		clearScreen();
-		lastUpdated = new Date().getTime();
+		UiApplication.getUiApplication().invokeLater(new Runnable() {
+			public void run() {
+				clearScreen();
+			}
+		});
+		
+		// Indicate update is happening
+		location.setLastUpdated(System.currentTimeMillis());
+		storeLocation(location);
 		
 		String myCountry = location.getCountry();
 		if (myCountry.equals("US") && options.useNws()) {
 			// United States - Get NWS NDFD data 
 			final MessageScreen wait = new MessageScreen("Getting Weather...");
-			pushScreen(wait);
+			invokeLater(new Runnable() {
+				public void run() {
+					pushScreen(wait);
+				}
+			});
 			
 			getDisplayNWSCurrentConditions(location);
 			
@@ -1394,13 +1631,27 @@ public class NwsClient extends UiApplication
 		} else {
 			// International - get Google Weather
 			try {
-				Hashtable weather = getGoogleWeather(location);
-				Vector fc = (Vector)weather.get("forecast");
-				displayGoogleCurrentConditions(location, (Hashtable)weather.get("current_conditions"));
-				displayForecast(location, fc);
-			} catch(ParseError re) {
-				LabelField errorLabel = new LabelField("Error loading Google Weather: "+re.getMessage());
-				mainScreen_.add(errorLabel);
+				final Hashtable weather = getGoogleWeather(location);
+				if (weather.containsKey("temperature")) {
+					updateIcon((String)weather.get("temperature"), 0);
+				}
+				final Vector fc = (Vector)weather.get("forecast");
+				UiApplication.getUiApplication().invokeLater(new Runnable() {
+					public void run()
+					{
+						displayGoogleCurrentConditions(location, (Hashtable)weather.get("current_conditions"));
+						displayForecast(location, fc, "Google");
+					}
+				});
+			} catch(Exception e) {
+				final String msg = e.getMessage();
+				UiApplication.getUiApplication().invokeLater(new Runnable() {
+					public void run()
+					{
+						LabelField errorLabel = new LabelField("Error loading Google Weather: "+msg);
+						mainScreen_.add(errorLabel);
+					}
+				});
 			}
 		}
 	}
@@ -1412,7 +1663,6 @@ public class NwsClient extends UiApplication
 	 */
 	private void storeLocation(LocationData location)
 	{
-		googleWeather = null; // clear out cached google weather...
 		RuntimeStore.getRuntimeStore().replace(ID, location);
 	}
 	

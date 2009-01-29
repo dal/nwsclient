@@ -1,5 +1,6 @@
 ## RIM Java Development Environment
 # RIM Project file
+AddOn=0
 AlwaysBuild=0
 [AlxImports
 ]
@@ -42,4 +43,4 @@ SystemModule=0
 Title=NWSClient
 Type=3
 Vendor=Renderfast
-Version=0.1
+Version=0.2

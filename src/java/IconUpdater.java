@@ -30,13 +30,7 @@ public class IconUpdater extends Thread
 			Hashtable conditions = NwsClient.getParseCurrentConditions(_location);
 			if (conditions != null && conditions.containsKey("temperature")) {
 				String temp = (String)conditions.get("temperature");
-				Bitmap bg = Bitmap.getBitmapResource("icon.png");
-				Graphics gfx = new Graphics(bg);
-				FontFamily fontfam[] = FontFamily.getFontFamilies();
-				Font smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, 12);
-				gfx.setFont(smallFont);
-				gfx.drawText(temp, 24, 12);
-				HomeScreen.updateIcon(bg, 1);
+				NwsClient.setIcon(temp, 1);
 			}
 		} catch (IOException e) {
 			System.err.println("Error getting icon current conditions: " + e.toString());

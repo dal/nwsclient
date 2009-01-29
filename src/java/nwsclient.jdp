@@ -1,5 +1,6 @@
 ## RIM Java Development Environment
 # RIM Project file
+AddOn=0
 AlwaysBuild=0
 [AlxImports
 ]
@@ -14,13 +15,11 @@ AutoRestart=0
 ]
 [DependsOn
 ]
-Description=Gets the current weather and forecast from the US National Weather Service.
 ExcludeFromBuildAll=0
 [Files
 AmbiguousLocationException.java
 BitmapProvider.java
 data\weather_stations.data
-IconUpdater.java
 img\icon.png
 img\website_blue.png
 LocationData.java
@@ -50,7 +49,4 @@ RibbonPosition=0
 RunOnStartup=1
 StartupTier=7
 SystemModule=1
-Title=NWSClient
 Type=0
-Vendor=Renderfast
-Version=0.1

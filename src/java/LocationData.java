@@ -42,6 +42,9 @@ public class LocationData implements Persistable
 	// Longitude
 	private double _lon;
 	
+	// The last time we got the weather for this location
+	private long lastUpdated_ = 0;
+	
 	// Nearest weather station id
 	private String _icao;
 	
@@ -99,6 +102,11 @@ public class LocationData implements Persistable
 		return _icao;
 	}
 	
+	public long getLastUpdated()
+	{
+		return lastUpdated_;
+	}
+	
 	public void setUserAddress(String ua)
 	{
 		_userAddress = ua;
@@ -132,6 +140,11 @@ public class LocationData implements Persistable
 	public void setIcao(String icao)
 	{
 		_icao = icao;
+	}
+	
+	public void setLastUpdated(long time)
+	{
+		lastUpdated_ = time;
 	}
 	
 	public void loadFromXml(Document document) throws AmbiguousLocationException, NotFoundException, ParseError
