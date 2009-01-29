@@ -47,13 +47,13 @@ public class WeatherStation extends Object
 	{
 		double[] point = { lat, lon };
 		WeatherStation best = null;
-		Vector result = _nearestNeighbor(this, point, 0, best, Double.MAX_VALUE);
+		Vector result = this.nearestNeighbor(point, 0, best, Double.MAX_VALUE);
 		WeatherStation station = (WeatherStation)result.elementAt(0);
 		return station.getName();
 	}
 	
-	private static Vector _nearestNeighbor(WeatherStation node, double[] point, 
-							int depth, WeatherStation currentBest, double bestDist) 
+	private Vector nearestNeighbor(double[] point, int depth, 
+									WeatherStation currentBest, double bestDist) 
 	{
 		
 		int axis = depth % 2;
@@ -62,23 +62,23 @@ public class WeatherStation extends Object
 		child = null;
 		otherChild = null;
 		
-		if (point[axis] <= node.getCoord(axis)) {
-			if (node.left != null) {
-				child = node.left;
-				otherChild = node.right;
+		if (point[axis] <= this.getCoord(axis)) {
+			if (this.left != null) {
+				child = this.left;
+				otherChild = this.right;
 			}
 		} else {
-			if (node.right != null) {
-				child = node.right;
-				otherChild = node.left;
+			if (this.right != null) {
+				child = this.right;
+				otherChild = this.left;
 			}
 		}
 		
 		if (child == null) {
-			double dist = node.distanceTo(point[0], point[1]);
-			if (currentBest == null || dist < bestDist) {
+			double dist = this.distanceTo(point[0], point[1]);
+			if (currentBest == null || dist*dist < bestDist) {
 				bestDist = dist;
-				currentBest = node;
+				currentBest = this;
 			}
 			Vector ret = new Vector();
 			ret.addElement(currentBest);
@@ -86,25 +86,28 @@ public class WeatherStation extends Object
 			return ret;
 		} else {
 			// Recurse!
-			Vector result = _nearestNeighbor(child, point, depth, currentBest, bestDist);
+			Vector result = child.nearestNeighbor(point, depth, currentBest, bestDist);
 			currentBest = (WeatherStation)result.elementAt(0);
 			Double tmp = (Double)result.elementAt(1);
 			bestDist = tmp.doubleValue();
 		}
 		
-		double bound = child.getCoord(axis) - node.getCoord(axis);
-		if (otherChild != null && (bound * bound) < bestDist) {
-			// uh oh, there could be closer point on the other side of the axis
-			Vector result = _nearestNeighbor(otherChild, point, depth, currentBest, bestDist);
-			currentBest = (WeatherStation)result.elementAt(0);
-			Double tmp = (Double)result.elementAt(1);
-			bestDist = tmp.doubleValue();
+		
+		if (otherChild != null) {
+			double bound = point[axis] - this.getCoord(axis);
+			if ((bound*bound) <= bestDist) {
+				// uh oh, there could be closer point on the other side of the splitting plane
+				Vector result = otherChild.nearestNeighbor(point, depth, currentBest, bestDist);
+				currentBest = (WeatherStation)result.elementAt(0);
+				Double tmp = (Double)result.elementAt(1);
+				bestDist = tmp.doubleValue();
+			}
 		}
 		
-		double dist = node.distanceTo(point[0], point[1]); 
+		double dist = this.distanceTo(point[0], point[1]); 
 		if (dist < bestDist) {
 			bestDist = dist;
-			currentBest = node;
+			currentBest = this;
 		}
 		
 		Vector ret = new Vector();
