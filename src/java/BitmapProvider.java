@@ -29,12 +29,10 @@ public class BitmapProvider extends Thread
 		_stop = true;
 	}
 	
-	public void getBitmap(String url, BitmapField field)
+	public synchronized void getBitmap(final String url, final BitmapField field)
 	{
-		synchronized(this) {
-			urls.addElement(url);
-			fields.addElement(field);
-		}
+		urls.addElement(url);
+		fields.addElement(field);
 		
 		if (!this.isAlive())
 			this.start();
@@ -61,8 +59,8 @@ public class BitmapProvider extends Thread
 						fetchBitmap(myUrl, myField);
 					}
 				} else {
-					// Wait half a second
-					sleep(500); 
+					// Wait a second
+					sleep(1000); 
 				}
 			} catch (InterruptedException ie) {
 				return;
@@ -70,7 +68,7 @@ public class BitmapProvider extends Thread
 		}
 	}
 	
-	private void setBitmapField(final BitmapField field, final Bitmap bm)
+	private synchronized void setBitmapField(final BitmapField field, final Bitmap bm)
 	{
 		// Set the bitmapFields bitmap!
 		UiApplication.getApplication().invokeLater(new Runnable() {
@@ -80,12 +78,13 @@ public class BitmapProvider extends Thread
 		});
 	}
 	
-	private void fetchBitmap(String url, final BitmapField field)
+	private void fetchBitmap(final String url, final BitmapField field)
 	{
-		InputStream is = NwsClient.getUrl(url);
-		
-		if (is == null) {
-			System.err.println("Error fetching bitmap (inputStream null): "+url);
+		InputStream is;
+		try {
+			is = NwsClient.getUrl(url);
+		} catch (Exception e) {
+			System.err.println("Error fetching bitmap: "+e.getMessage());
 			return;
 		}
 		
