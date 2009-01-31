@@ -335,8 +335,9 @@ public class NwsClient extends UiApplication
 					// Check the runtime store for new options
 					getOptionsFromStore();
 					// Make sure the user wants us to update the icon and we have data service
-					if (options.autoUpdateIcon() == false || 
-						!RadioInfo.isDataServiceOperational()) {
+					if (options.autoUpdateIcon() == false 
+						|| !RadioInfo.isDataServiceOperational()) 
+					{
 						// do nothing but sleep
 						sleep(4000);
 						continue;
@@ -346,7 +347,8 @@ public class NwsClient extends UiApplication
 					LocationData newLoc = (LocationData)RuntimeStore.getRuntimeStore().get( ID );
 					// If there's any change to the location (including update) re-fetch it
 					if (newLoc != null && (newLoc != location_ 
-						|| newLoc.getLastUpdated() != location_.getLastUpdated())) {
+						|| newLoc.getLastUpdated() != location_.getLastUpdated())) 
+					{
 						synchronized(this) {
 							setLocation(newLoc);
 						}
@@ -377,13 +379,18 @@ public class NwsClient extends UiApplication
 		
 	}
 	
+	/**
+	 * This thread fires every second and decides whether we need to update 
+	 * the weather display.
+	 * 
+	 */
 	class WorkerThread extends Thread
 	{
 		boolean stop_ = false;
 		
 		WorkerThread()
 		{
-			// do nothing
+			// constructor does nothing
 		}
 		
 		public void run()
@@ -691,6 +698,8 @@ public class NwsClient extends UiApplication
 			this.locationFinder_ = this.new LocationFinder();
 			this.locationFinder_.start();
 			
+			this.bitmapProvider_ = new BitmapProvider();
+			
 			// if no location go to the options screen
 			if (options.getCurrentLocation() != null) {
 				refreshWeather();
@@ -736,22 +745,6 @@ public class NwsClient extends UiApplication
 			// Store the new location to let the icon updater thread know we're in control
 			storeLocation(loc);
 		}
-	}
-	
-	private void resetThreads()
-	{
-		if (bitmapProvider_ != null && bitmapProvider_.isAlive()) {
-			// We're going to stop the bitmapProvider and create a new fresh one
-			//bitmapProvider_.interrupt();
-			bitmapProvider_.stop();
-			try {
-				bitmapProvider_.join();
-			} catch (InterruptedException ie) {
-				System.err.println("BitmapProvider already stopped...");
-			}
-		}
-		bitmapProvider_ = null;
-		bitmapProvider_ = new BitmapProvider(); // new bitmapprovider thread
 	}
 	
 	// menu items
@@ -1254,8 +1247,6 @@ public class NwsClient extends UiApplication
 		if (!condIconUrl.equals("")) {
 			//System.err.println("Getting "+condIconUrl);
 			bitmapProvider_.getBitmap(condIconUrl, currentCondBitmap);
-		} else {
-			System.err.println("Condition icon url was empty!");
 		}
 		
 		VerticalFieldManager topRightCol = new VerticalFieldManager();
@@ -1348,8 +1339,6 @@ public class NwsClient extends UiApplication
 		if (!condIconUrl.equals("")) {
 			//System.err.println("Getting "+condIconUrl);
 			bitmapProvider_.getBitmap(condIconUrl, currentCondBitmap);
-		} else {
-			System.err.println("Condition icon url was empty!");
 		}
 		
 		VerticalFieldManager topRightCol = new VerticalFieldManager();
@@ -1426,11 +1415,9 @@ public class NwsClient extends UiApplication
 			BitmapField currentCondBitmap = new BitmapField();
 			
 			if (!iconUrl.equals("")) {
-				//System.err.println("Getting "+iconUrl);
 				bitmapProvider_.getBitmap(iconUrl, currentCondBitmap);
-			} else {
-				System.err.println("Condition icon url was empty!");
 			}
+			
 			HorizontalFieldManager myHField = new HorizontalFieldManager();
 			mainScreen_.add(myHField);
 			
@@ -1703,7 +1690,6 @@ public class NwsClient extends UiApplication
 	 */
 	private void getDisplayWeather(final LocationData location) 
 	{
-		resetThreads(); // reset the bitmapProvider
 		UiApplication.getUiApplication().invokeLater(new Runnable() {
 			public void run() {
 				clearScreen();
