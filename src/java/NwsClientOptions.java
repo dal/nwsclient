@@ -12,6 +12,7 @@ public class NwsClientOptions implements Persistable
 	private final int MAX_LOCATIONS = 10;
 	//private boolean _autoRefresh = true;
 	private boolean _useNws = true;
+	private boolean _autoUpdateIcon = true;
 	
 	public NwsClientOptions()
 	{
@@ -54,12 +55,20 @@ public class NwsClientOptions implements Persistable
 		return _useNws;
 	}
 	
+	public boolean autoUpdateIcon()
+	{
+		return _autoUpdateIcon;
+	}
+	
 	public void setUseNws(boolean use)
 	{
 		_useNws = use;
 	}
 	
-	
+	public void setAutoUpdateIcon(boolean aui)
+	{
+		_autoUpdateIcon = aui;
+	}
 
 }
 
