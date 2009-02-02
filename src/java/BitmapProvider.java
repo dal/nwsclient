@@ -47,13 +47,15 @@ public class BitmapProvider extends Thread
 					// go get some bitmaps
 					String myUrl;
 					BitmapField myField;
+					boolean haveIt = false;
 					synchronized(this) {
 						myUrl = (String)urls.firstElement();
 						myField = (BitmapField)fields.firstElement();
 						urls.removeElementAt(0);
 						fields.removeElementAt(0);
+						haveIt = bitmaps.containsKey(myUrl);
 					}
-					if (bitmaps.containsKey(myUrl)) {
+					if (haveIt) {
 						setBitmapField(myField, (Bitmap)bitmaps.get(myUrl));
 					} else {
 						fetchBitmap(myUrl, myField);
@@ -111,7 +113,9 @@ public class BitmapProvider extends Thread
 			return;
 		}
 		
-		bitmaps.put(url, bm);
+		synchronized(this) {
+			bitmaps.put(url, bm);
+		}
 		//System.err.println("Got "+url);
 		setBitmapField(field, bm);
 	}
