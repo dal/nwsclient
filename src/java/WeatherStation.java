@@ -49,13 +49,16 @@ public class WeatherStation extends Object
 		WeatherStation best = null;
 		Vector result = this.nearestNeighbor(point, 0, best, Double.MAX_VALUE);
 		WeatherStation station = (WeatherStation)result.elementAt(0);
+		Double bestDist = (Double)result.elementAt(1);
+		System.err.println(station.getName()+" "+String.valueOf(station.getCoord(0))+
+			" "+String.valueOf(station.getCoord(1))+" dist: "+bestDist.toString());
 		return station.getName();
 	}
 	
 	private Vector nearestNeighbor(double[] point, int depth, 
 									WeatherStation currentBest, double bestDist) 
 	{
-		
+		System.err.println(this.getName());
 		int axis = depth % 2;
 		depth += 1;
 		WeatherStation child, otherChild;
@@ -63,14 +66,14 @@ public class WeatherStation extends Object
 		otherChild = null;
 		
 		if (point[axis] <= this.getCoord(axis)) {
+			otherChild = this.right;
 			if (this.left != null) {
 				child = this.left;
-				otherChild = this.right;
 			}
 		} else {
+			otherChild = this.left;
 			if (this.right != null) {
 				child = this.right;
-				otherChild = this.left;
 			}
 		}
 		
@@ -92,22 +95,23 @@ public class WeatherStation extends Object
 			bestDist = tmp.doubleValue();
 		}
 		
+		double dist = this.distanceTo(point[0], point[1]); 
+		if (dist < bestDist) {
+			bestDist = dist;
+			currentBest = this;
+		}
 		
 		if (otherChild != null) {
 			double bound = point[axis] - this.getCoord(axis);
 			if ((bound*bound) <= bestDist) {
 				// uh oh, there could be closer point on the other side of the splitting plane
 				Vector result = otherChild.nearestNeighbor(point, depth, currentBest, bestDist);
-				currentBest = (WeatherStation)result.elementAt(0);
 				Double tmp = (Double)result.elementAt(1);
-				bestDist = tmp.doubleValue();
+				if (tmp.doubleValue() < bestDist) {
+					currentBest = (WeatherStation)result.elementAt(0);
+					bestDist = tmp.doubleValue();
+				}
 			}
-		}
-		
-		double dist = this.distanceTo(point[0], point[1]); 
-		if (dist < bestDist) {
-			bestDist = dist;
-			currentBest = this;
 		}
 		
 		Vector ret = new Vector();
