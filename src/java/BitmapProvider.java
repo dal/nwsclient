@@ -41,38 +41,50 @@ public class BitmapProvider extends Thread
 	
 	public void run()
 	{
-		while(!_stop) {
-			try {
-				if (urls.size() > 0) {
-					// go get some bitmaps
-					String myUrl;
-					BitmapField myField;
-					boolean haveIt = false;
-					synchronized(this) {
-						myUrl = (String)urls.firstElement();
-						myField = (BitmapField)fields.firstElement();
-						urls.removeElementAt(0);
-						fields.removeElementAt(0);
-						haveIt = bitmaps.containsKey(myUrl);
-					}
-					if (haveIt) {
-						setBitmapField(myField, (Bitmap)bitmaps.get(myUrl));
-					} else {
-						fetchBitmap(myUrl, myField);
-					}
-				} else {
-					// Wait a second
-					sleep(1000); 
+		for(;;) {
+			final int urlCount;
+			String myUrl = null;
+			BitmapField myField = null;
+			boolean haveIt = false;
+			
+			// We don't want to miss any urls coming in...
+			synchronized(this) {
+				// Check for stop
+				if (_stop) {
+					break;
 				}
-			} catch (InterruptedException ie) {
-				return;
+				urlCount = urls.size();
+				if (urlCount > 0) {
+				// go get some bitmaps
+					myUrl = (String)urls.firstElement();
+					myField = (BitmapField)fields.firstElement();
+					urls.removeElementAt(0);
+					fields.removeElementAt(0);
+					haveIt = bitmaps.containsKey(myUrl);
+				}
+			}
+			
+			// urlCount will be > 0 if we have anything to fetch...
+			if (urlCount > 0 && myField != null && myUrl != null) {
+				if (haveIt) {
+					setBitmapField(myField, (Bitmap)bitmaps.get(myUrl));
+				} else {
+					fetchBitmap(myUrl, myField);
+				}
+			} else {
+				// Wait a second
+				try {
+					sleep(1000);
+				} catch (InterruptedException ie) {
+					return;
+				}
 			}
 		}
 	}
 	
-	private synchronized void setBitmapField(final BitmapField field, final Bitmap bm)
+	private void setBitmapField(final BitmapField field, final Bitmap bm)
 	{
-		// Set the bitmapFields bitmap!
+		// Set the bitmapField's bitmap
 		UiApplication.getApplication().invokeLater(new Runnable() {
 			public void run() {
 				field.setBitmap(bm);
@@ -95,6 +107,7 @@ public class BitmapProvider extends Thread
 		try {
 			buff = new byte[100000];
 			len = is.read(buff, 0, 100000);
+			is.close();
 		} catch (IOException e) {
 			System.err.println("Error reading bitmap buffer: "+e.toString());
 			return;
@@ -109,7 +122,7 @@ public class BitmapProvider extends Thread
 		try {
 			bm = Bitmap.createBitmapFromBytes(buff, 0, -1, 1);
 		} catch(Exception e) {
-			System.err.println("Error fetching bitmap"+url+": "+e.toString());
+			System.err.println("Error decoding bitmap"+url+": "+e.toString());
 			return;
 		}
 		
