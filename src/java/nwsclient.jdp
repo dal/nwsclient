@@ -15,6 +15,7 @@ AutoRestart=0
 ]
 [DependsOn
 ]
+Description=Retrieve current weather and forecast information from NOAA.
 ExcludeFromBuildAll=0
 [Files
 AmbiguousLocationException.java
@@ -49,4 +50,7 @@ RibbonPosition=0
 RunOnStartup=1
 StartupTier=7
 SystemModule=1
+Title=NWSClient
 Type=0
+Vendor=renderfast.com
+Version=0.3
