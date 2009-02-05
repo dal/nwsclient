@@ -692,13 +692,14 @@ public class NwsClient extends UiApplication
 			mainScreen_ = new NwsClientScreen();
 			pushScreen(mainScreen_);
 			
+			// Don't need to start the bitmpaProvider--it will start on demand
+			this.bitmapProvider_ = new BitmapProvider();
+			
 			this.workerThread_ = this.new WorkerThread();
 			this.workerThread_.start();
 			
 			this.locationFinder_ = this.new LocationFinder();
 			this.locationFinder_.start();
-			
-			this.bitmapProvider_ = new BitmapProvider();
 			
 			// if no location go to the options screen
 			if (options.getCurrentLocation() != null) {
@@ -1245,7 +1246,6 @@ public class NwsClient extends UiApplication
 		topHField.add(currentCondBitmap);
 		
 		if (!condIconUrl.equals("")) {
-			//System.err.println("Getting "+condIconUrl);
 			bitmapProvider_.getBitmap(condIconUrl, currentCondBitmap);
 		}
 		
@@ -1334,12 +1334,12 @@ public class NwsClient extends UiApplication
 		main.add(topHField);
 		
 		BitmapField currentCondBitmap = new BitmapField();
-		topHField.add(currentCondBitmap);
 		
 		if (!condIconUrl.equals("")) {
-			//System.err.println("Getting "+condIconUrl);
 			bitmapProvider_.getBitmap(condIconUrl, currentCondBitmap);
 		}
+		
+		topHField.add(currentCondBitmap);
 		
 		VerticalFieldManager topRightCol = new VerticalFieldManager();
 		topHField.add(topRightCol);
@@ -1412,16 +1412,16 @@ public class NwsClient extends UiApplication
 			lbl.setFont(fnt);
 			mainScreen_.add(lbl);
 			
-			BitmapField currentCondBitmap = new BitmapField();
+			BitmapField forecastBitmap = new BitmapField();
 			
 			if (!iconUrl.equals("")) {
-				bitmapProvider_.getBitmap(iconUrl, currentCondBitmap);
+				bitmapProvider_.getBitmap(iconUrl, forecastBitmap);
 			}
 			
 			HorizontalFieldManager myHField = new HorizontalFieldManager();
 			mainScreen_.add(myHField);
 			
-			myHField.add(currentCondBitmap);
+			myHField.add(forecastBitmap);
 			
 			FlowFieldManager rightCol = new FlowFieldManager();
 			myHField.add(rightCol);
@@ -1438,7 +1438,7 @@ public class NwsClient extends UiApplication
 	
 	private void displayCredit(final String who, final long when)
 	{
-		DateFormat dateFormat = new SimpleDateFormat("H:mma E, MMM d, yyyy");
+		DateFormat dateFormat = new SimpleDateFormat("h:mma E, MMM d, yyyy");
 		Date lastUpdate = new Date(when); 
 		String formattedDate = dateFormat.format(lastUpdate, new StringBuffer(), null).toString();
 		String credit = "Downloaded at "+formattedDate+
@@ -1631,14 +1631,13 @@ public class NwsClient extends UiApplication
 						);
 					}
 				});
-				//displayNDFDByDay(location, parsed);
 			}
 		} catch (Exception e) {
 			final String msg = e.getMessage();
 			UiApplication.getUiApplication().invokeLater(new Runnable() {
 				public void run()
 				{
-					LabelField errorLabel = new LabelField("Error getting current conditions: "+msg);
+					LabelField errorLabel = new LabelField("Error getting forecast: "+msg);
 					mainScreen_.add(errorLabel);
 				}
 			});
@@ -1653,13 +1652,19 @@ public class NwsClient extends UiApplication
 	private void getDisplayNWSCurrentConditions(final LocationData location)
 	{
 		if (location.getIcao().equals("")) {
-			Dialog.alert("Could not find closest weather station for location.");
+			UiApplication.getUiApplication().invokeLater(new Runnable() {
+				public void run()
+				{
+					Dialog.alert("Could not find closest weather station for location.");
+				}
+			});
 			return;
 		}
 		
 		try {
 			final Hashtable parsed = getParseCurrentConditions(location);
 			if (parsed != null && parsed.containsKey("temperature")) {
+				// Update the application icon
 				updateIcon((String)parsed.get("temperature"), 0);
 			}
 			UiApplication.getUiApplication().invokeLater(new Runnable() {
