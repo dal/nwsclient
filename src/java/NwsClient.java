@@ -321,9 +321,11 @@ public class NwsClient extends UiApplication
 					System.err.println("Error getting icon current conditions: null current conditions");
 				}
 			} catch (ParseError pe) {
-				System.err.println("Error parsing current conditions: "+pe.toString());
+				System.err.println("Error parsing current conditions for icon: "+pe.getMessage());
+			} catch (IOException ioe) {
+				System.err.println("I/O Error getting current conditions for icon: "+ioe.getMessage());
 			} catch (Exception e) {
-				System.err.println("Error getting icon current conditions: " + e.toString());
+				System.err.println("Error getting current conditions for icon: " + e.getMessage());
 			}
 			
 		}
@@ -539,50 +541,7 @@ public class NwsClient extends UiApplication
 		}
 	}
 	
-	/**
-	 * Convenience method takes a string url and fetches an InputStream object.
-	 * <p>
-	 * Returns null if there's a problem fetching the url.
-	 * @param url The web url to fetch.
-	 * @return    An inputStream of the requested URL's contents
-	 */
-	public static InputStream getUrl(String url)
-	{
-		System.err.println("Fetching url "+url);
-		StreamConnection s = null;
-		InputStream is = null;
-		int rc;
-		
-		try {
-			
-			s = (StreamConnection)Connector.open(url);
-			HttpConnection httpConn = (HttpConnection)s;
-			
-			int status = httpConn.getResponseCode();
-			
-			if (status == HttpConnection.HTTP_OK) {
-				is = httpConn.openInputStream();
-				
-				// pass the stream on to the supplied handler
-				//handler.handleIn  putStream(is);
-				return is;
-			} else {
-				System.err.println("Error fetching url. Status: "+status);
-			}
-			
-			//if (is != null)
-			//	is.close();
-			if (s != null)
-				s.close();
-			
-			// We only get here if there's been an error
-			throw new RuntimeException("Error fetching url "+url+". Status: "+status);
-			
-		} catch (IOException e) {
-			System.err.println("Error fetching url "+url+". "+e.toString());
-			throw new RuntimeException(e.toString());
-		}
-	}
+	
 	
 	public static synchronized void getOptionsFromStore()
 	{
@@ -627,18 +586,19 @@ public class NwsClient extends UiApplication
 			if (location.getIcao().equals(""))
 				throw new RuntimeException("Could not get nearest weather station");
 			
-			InputStream is = getUrl(NWS_CURRENT_URL+location.getIcao()+".xml");
-			
-			if (is != null) {
-				try {
-					parsed = parseUSCurrentConditions(is);
-					is.close();
-				} catch (IOException ioe) {
-					// choose a more specific address?
-					//System.err.println("Error getting weather informtion: "+ioe.toString());
-					throw new IOException(ioe.toString());
-				}
+			HttpHelper.Connection conn = null;
+			try {
+				conn = HttpHelper.getUrl(NWS_CURRENT_URL+location.getIcao()+".xml");
+				parsed = parseUSCurrentConditions(conn.is);
+			} catch (IOException ioe) {
+				// Pass on the error
+				throw new IOException(ioe.getMessage());
+			} finally {
+				// Always close our http connection
+				if (conn != null)
+					conn.close();
 			}
+			
 		} else {
 			// International / Google
 			Hashtable gw = getGoogleWeather(location);
@@ -672,7 +632,6 @@ public class NwsClient extends UiApplication
 				} else {
 					keepGoing = false;
 					// Start the icon updater thread
-					// disabled for now -- debug debug!
 					if (options.getCurrentLocation() != null) {
 						storeLocation(options.getCurrentLocation());
 					}
@@ -802,43 +761,46 @@ public class NwsClient extends UiApplication
 		post.append("q", userAddress);
 		post.append("output", "xml");
 		post.append("key", GOOGLE_API_KEY);
-		InputStream is = getUrl(GOOGLE_MAPS_URL+"?"+post.toString());
-		if (is != null) {
-			// Parse the XML from the Google Maps Geocoder
+		HttpHelper.Connection conn = null; 
+		// Parse the XML from the Google Maps Geocoder
+		try {
+			conn = HttpHelper.getUrl(GOOGLE_MAPS_URL+"?"+post.toString());
+			
+			DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+			DocumentBuilder builder = factory.newDocumentBuilder();
+			Document document = builder.parse(conn.is);
+			
+			LocationData loc = new LocationData();
+			loc.setUserAddress(userAddress);
+			
 			try {
-				DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-				DocumentBuilder builder = factory.newDocumentBuilder();
-				Document document = builder.parse(is);
-				is.close();
-				
-				LocationData loc = new LocationData();
-				loc.setUserAddress(userAddress);
-				
-				try {
-					loc.loadFromXml(document);
-					return loc;
-				} catch (NotFoundException e) {
-					invokeLater(new Runnable() {
-						public void run() {
-							Dialog.alert("Could not find location");
-						}
-					});
-				} catch (AmbiguousLocationException e) {
-					// choose a more specific address?
-					invokeLater(new Runnable() {
-						public void run() {
-							Dialog.alert("Choose a more specific address");
-						}
-					});
-				}
-			} catch (Exception e) {
-				final String msg = e.toString();
+				loc.loadFromXml(document);
+				return loc;
+			} catch (NotFoundException e) {
 				invokeLater(new Runnable() {
 					public void run() {
-						Dialog.alert("Error getting the location: '"+msg+"'");
+						Dialog.alert("Could not find location");
+					}
+				});
+			} catch (AmbiguousLocationException e) {
+				// choose a more specific address?
+				invokeLater(new Runnable() {
+					public void run() {
+						Dialog.alert("Choose a more specific address");
 					}
 				});
 			}
+		} catch (Exception e) {
+			final String msg = e.toString();
+			invokeLater(new Runnable() {
+				public void run() {
+					Dialog.alert("Error getting the location: '"+msg+"'");
+				}
+			});
+		} finally {
+			// Always close the http connection
+			if (conn != null)
+				conn.close();
 		}
 		return null;
 	}
@@ -1187,9 +1149,9 @@ public class NwsClient extends UiApplication
 	}
 	
 		
-	private void clearScreen()
+	private synchronized void clearScreen()
 	{
-		// delete everyone from this manager
+		// replace the screen with a new, clean one
 		popScreen(mainScreen_);
 		mainScreen_ = new NwsClientScreen();
 		pushScreen(mainScreen_);
@@ -1406,7 +1368,7 @@ public class NwsClient extends UiApplication
 			}
 			String iconUrl = (String)day.get("icon_url");
 			
-			// Layout the elements on the screen
+			// Lay out the elements on the screen
 			LabelField lbl = new LabelField(dayOfWeek);
 			Font fnt = lbl.getFont().derive(Font.BOLD);
 			lbl.setFont(fnt);
@@ -1415,6 +1377,7 @@ public class NwsClient extends UiApplication
 			BitmapField forecastBitmap = new BitmapField();
 			
 			if (!iconUrl.equals("")) {
+				// DEBUG DEBUG DEBUG
 				bitmapProvider_.getBitmap(iconUrl, forecastBitmap);
 			}
 			
@@ -1528,7 +1491,6 @@ public class NwsClient extends UiApplication
 				// there was a problem...
 				throw new ParseError("Google weather returned no data");
 			}
-			is.close();
 			
 		} catch(ParseError pe) {
 			throw new ParseError(pe.toString());
@@ -1554,17 +1516,24 @@ public class NwsClient extends UiApplication
 	 *		   grab the weather information.
 	 * 
 	 */
-	public Hashtable getGoogleWeather(final LocationData location) throws ParseError
+	public Hashtable getGoogleWeather(final LocationData location) throws IOException, ParseError
 	{	
 		// Get some new Google weather
 		URLEncodedPostData post = new URLEncodedPostData(null, true);
-		//post.append("weather", location.getUserAddress());
 		post.append("weather", location.getLocality()+", "+location.getCountry());
 		post.append("hl", "en");
-		InputStream is = getUrl(GOOGLE_WEATHER_URL+"?"+post.toString());
-		Hashtable googleWeather = null;
-		googleWeather = parseGoogleWeather(is);
-		return googleWeather;
+		HttpHelper.Connection conn = null;
+		try {
+			conn = HttpHelper.getUrl(GOOGLE_WEATHER_URL+"?"+post.toString());
+			Hashtable googleWeather = parseGoogleWeather(conn.is);
+			return googleWeather;
+		} catch (IOException ioe) {
+			// Pass the exception on
+			throw new IOException(ioe.getMessage());
+		} finally {
+			if (conn != null)
+				conn.close();
+		}
 	}
 	
 	public void getDisplayGoogleWeather(final LocationData location)
@@ -1617,21 +1586,19 @@ public class NwsClient extends UiApplication
 		post.append("lon", Double.toString(location.getLon()));
 		post.append("numDays", "7"); // get a week
 		
+		HttpHelper.Connection conn = null;
 		try {
-			InputStream is = getUrl(NWS_URL+"?"+post.toString());
-		
-			if (is != null) {
-				final Vector flattened = flattenNDFD(parseNDFD(is, observations));
-				is.close();
-				UiApplication.getUiApplication().invokeLater(new Runnable() {
-					public void run()
-					{
-						displayForecast(location, flattened, 
-						"The National Oceanic and Atmospheric Administration"
-						);
-					}
-				});
-			}
+			conn = HttpHelper.getUrl(NWS_URL+"?"+post.toString());
+			final Vector flattened = flattenNDFD(parseNDFD(conn.is, observations));
+			
+			UiApplication.getUiApplication().invokeLater(new Runnable() {
+				public void run()
+				{
+					displayForecast(location, flattened, 
+					"The National Oceanic and Atmospheric Administration"
+					);
+				}
+			});
 		} catch (Exception e) {
 			final String msg = e.getMessage();
 			UiApplication.getUiApplication().invokeLater(new Runnable() {
@@ -1641,6 +1608,10 @@ public class NwsClient extends UiApplication
 					mainScreen_.add(errorLabel);
 				}
 			});
+		} finally {
+			// Always close our http connection
+			if (conn != null)
+				conn.close();
 		}
 	}
 	
@@ -1695,7 +1666,7 @@ public class NwsClient extends UiApplication
 	 */
 	private void getDisplayWeather(final LocationData location) 
 	{
-		UiApplication.getUiApplication().invokeLater(new Runnable() {
+		UiApplication.getUiApplication().invokeAndWait(new Runnable() {
 			public void run() {
 				clearScreen();
 			}
