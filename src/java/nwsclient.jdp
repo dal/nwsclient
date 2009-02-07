@@ -21,6 +21,7 @@ ExcludeFromBuildAll=0
 AmbiguousLocationException.java
 BitmapProvider.java
 data\weather_stations.data
+HttpHelper.java
 img\icon.png
 img\website_blue.png
 LocationData.java
