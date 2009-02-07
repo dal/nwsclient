@@ -13,7 +13,6 @@ import net.rim.device.api.i18n.*;
 import net.rim.blackberry.api.browser.*; // for urlencoding
 import net.rim.device.api.ui.component.*;
 import net.rim.device.api.ui.component.ChoiceField.*;
-import net.rim.device.api.system.RuntimeStore.*;
 import net.rim.blackberry.api.homescreen.*; // for updating the application icon
 import net.rim.device.api.i18n.SimpleDateFormat.*;
 import javax.microedition.io.*;
@@ -181,7 +180,6 @@ public class NwsClient extends UiApplication
 							optionsScreen_.close();
 						
 						// Tell the icon updater about the new location
-						storeLocation(newLoc);
 						store.setContents(options);
 						store.commit();
 						if (checkDataConnectionAndWarn()) {
@@ -346,7 +344,7 @@ public class NwsClient extends UiApplication
 					}
 					
 					// Check for a new location coming in...
-					LocationData newLoc = (LocationData)RuntimeStore.getRuntimeStore().get( ID );
+					LocationData newLoc = options.getCurrentLocation();
 					// If there's any change to the location (including update) re-fetch it
 					if (newLoc != null && (newLoc != location_ 
 						|| newLoc.getLastUpdated() != location_.getLastUpdated())) 
@@ -506,7 +504,6 @@ public class NwsClient extends UiApplication
 								}
 							});
 							options.setCurrentLocation(newLoc);
-							storeLocation(newLoc);
 							store.setContents(options);
 							store.commit();
 							refreshWeather();
@@ -632,9 +629,6 @@ public class NwsClient extends UiApplication
 				} else {
 					keepGoing = false;
 					// Start the icon updater thread
-					if (options.getCurrentLocation() != null) {
-						storeLocation(options.getCurrentLocation());
-					}
 					IconUpdaterThread iup = new IconUpdaterThread();
 					workerThread_ = iup;
 					if (options.getCurrentLocation() != null) {
@@ -702,8 +696,6 @@ public class NwsClient extends UiApplication
 		LocationData loc = options.getCurrentLocation();
 		if (loc != null) {
 			loc.setLastUpdated(lastUpdated);
-			// Store the new location to let the icon updater thread know we're in control
-			storeLocation(loc);
 		}
 	}
 	
@@ -1674,7 +1666,6 @@ public class NwsClient extends UiApplication
 		
 		// Indicate update is happening
 		location.setLastUpdated(System.currentTimeMillis());
-		storeLocation(location);
 		
 		final MessageScreen wait = new MessageScreen("Getting Weather...");
 		invokeLater(new Runnable() {
@@ -1703,16 +1694,6 @@ public class NwsClient extends UiApplication
 				popScreen(wait);
 			}
 		});
-	}
-	
-	/**
-	 * Store a new location to the runtime store so the application icon updater
-	 * is aware of changes to the current location.
-	 * @param location The new LocationData object to store
-	 */
-	private void storeLocation(LocationData location)
-	{
-		RuntimeStore.getRuntimeStore().replace(ID, location);
 	}
 	
 }
