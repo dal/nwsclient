@@ -94,9 +94,9 @@ public class BitmapProvider extends Thread
 	
 	private void fetchBitmap(final String url, final BitmapField field)
 	{
-		InputStream is;
+		
 		try {
-			is = NwsClient.getUrl(url);
+			
 		} catch (Exception e) {
 			System.err.println("Error fetching bitmap: "+e.getMessage());
 			return;
@@ -104,13 +104,17 @@ public class BitmapProvider extends Thread
 		
 		byte[] buff;
 		int len = 0;
+		HttpHelper.Connection conn = null;
 		try {
+			conn = HttpHelper.getUrl(url);
 			buff = new byte[100000];
-			len = is.read(buff, 0, 100000);
-			is.close();
+			len = conn.is.read(buff, 0, 100000);
 		} catch (IOException e) {
 			System.err.println("Error reading bitmap buffer: "+e.toString());
 			return;
+		} finally {
+			if (conn != null)
+				conn.close();
 		}
 		
 		if (len == 0) {
@@ -121,7 +125,7 @@ public class BitmapProvider extends Thread
 		final Bitmap bm;
 		try {
 			bm = Bitmap.createBitmapFromBytes(buff, 0, -1, 1);
-		} catch(Exception e) {
+		} catch (Exception e) {
 			System.err.println("Error decoding bitmap"+url+": "+e.toString());
 			return;
 		}
