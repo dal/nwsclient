@@ -41,8 +41,8 @@ public class NwsClient extends UiApplication
 	private static final String GOOGLE_API_KEY = 
 		"ABQIAAAAC8JsE5tvhHeNFm7ZGLaE4hRb6y4KxHYjOJR6okNA-FLzn8UPtxTXruj85ZyxdVMqDazcxknt-CapTQ";
 	
-	//private static String NWS_URL = "http://www.weather.gov/forecasts/xml/SOAP_server/ndfdXMLclient.php";
-	private static final String NWS_URL = "http://www.weather.gov/forecasts/xml/SOAP_server/ndfdSOAPclientByDay.php";
+	private static final String NWS_XML_URL = "http://www.weather.gov/forecasts/xml/SOAP_server/ndfdXMLclient.php";
+	private static final String NWS_DAY_URL = "http://www.weather.gov/forecasts/xml/SOAP_server/ndfdSOAPclientByDay.php";
 	
 	private static final String NWS_CURRENT_URL = "http://www.weather.gov/xml/current_obs/";
 	
@@ -312,9 +312,11 @@ public class NwsClient extends UiApplication
 			// Get our current temp
 			try {
 				Hashtable conditions = getParseCurrentConditions(location_);
+				Vector alerts = getAlerts(location_);
+				boolean alert = (alerts.size() > 0);
 				if (conditions != null && conditions.containsKey("temperature")) {
 					String temp = (String)conditions.get("temperature");
-					updateIcon(temp, 1);
+					updateIcon(temp, alert, 1);
 				} else {
 					System.err.println("Error getting icon current conditions: null current conditions");
 				}
@@ -552,7 +554,7 @@ public class NwsClient extends UiApplication
 		}
 	}
 	
-	public static synchronized void updateIcon(String temp, int whichApp)
+	public static synchronized void updateIcon(String temp, boolean alert, int whichApp)
 	{
 		int lOffset = 22; // left offset
 		if (temp.length() >= 3) // move to the left if > 3 chars long
@@ -563,6 +565,15 @@ public class NwsClient extends UiApplication
 		Graphics gfx = new Graphics(bg);
 		FontFamily fontfam[] = FontFamily.getFontFamilies();
 		Font smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, 12);
+		if (alert) {
+			gfx.setColor(0xffff33); // yellow text
+			gfx.fillArc(5, 18, 16, 16, 0, 360);
+			gfx.setColor(0xff3333); // red background
+			gfx.drawArc(6, 19, 14, 14, 0, 360);
+			Font boldFont = smallFont.derive(Font.BOLD);
+			gfx.setFont(boldFont);
+			gfx.drawText("!", 11, 20); // Exclamation point
+		}
 		gfx.setFont(smallFont);
 		gfx.drawText(temp, lOffset, 12);
 		HomeScreen.updateIcon(bg, 1);
@@ -946,13 +957,6 @@ public class NwsClient extends UiApplication
 		// build up our hash of hashes
 		Hashtable fc = new Hashtable();
 		
-		/*
-		String[] observations = { "temperature", "precipitation", 
-			"wind-speed", "direction", "cloud-amount", "humidity",
-			"conditions-icon", "hazards"
-		};
-		*/
-		
 		for (int h=0; h < observations.length; h++) {
 			String obsName = observations[h];
 			
@@ -971,10 +975,13 @@ public class NwsClient extends UiApplication
 					Vector obsTimes = (Vector)times.get(timeLayout);
 					
 					String obsType = "";
-					if (obs.hasAttribute("type"))
+					if (obs.hasAttribute("type")) {
 						obsType = obs.getAttribute("type");
-					else if (obsName.equals("weather")) 
+					} else if (obsName.equals("weather")) { 
 						obsType = "weather-conditions";
+					} else if (obsName.equals("hazards")) {
+						obsType = "hazard-conditions";
+					}
 					
 					String obsUnits = "";
 					if (obs.hasAttribute("units"))
@@ -1026,6 +1033,22 @@ public class NwsClient extends UiApplication
 								theObs.value = XmlHelper.getNodeText(obsChild);
 								myObservations.addElement(theObs);
 								counter++;
+							} else if (obsChild.getTagName().equals("hazard-conditions")) {
+								// Hazards/warnings are a weird case
+								if (counter >= obsTimes.size()) {
+									// we've run out of times...
+									System.err.println("Not enough times for "+obsType);
+									continue;
+								}
+								// Actual hazards are nested even further down...
+								NodeList myHazards = obsChild.getElementsByTagName("hazard");
+								if (myHazards.getLength() > 0) {
+									Element myHazardEl = (Element)myHazards.item(0);
+									theObs.value = myHazardEl.getAttribute("phenomena");
+									theObs.units = myHazardEl.getAttribute("significance");
+									myObservations.addElement(theObs);
+								}
+								counter++;
 							} else if (obsChild.getTagName().equals(obsType)) {
 								// It's a condition -- i.e. "Partly Cloudy"
 								if (counter >= obsTimes.size()) {
@@ -1036,7 +1059,7 @@ public class NwsClient extends UiApplication
 								theObs.value = obsChild.getAttribute("weather-summary");
 								myObservations.addElement(theObs);
 								counter++;
-							}
+							} 
 						}
 						// Add our list of observations to the hashtable
 						obsTypes.put(obsType, myObservations);
@@ -1249,7 +1272,7 @@ public class NwsClient extends UiApplication
 			mainScreen_.add(new LabelField("Unable to fetch current conditions"));
 			return;
 		} else if (weather.containsKey("temperature")) {
-			updateIcon((String)weather.get("temperature"), 0);
+			updateIcon((String)weather.get("temperature"), false, 0);
 		}
 		
 		//String address = (String)weather.get("city");
@@ -1389,6 +1412,53 @@ public class NwsClient extends UiApplication
 			mainScreen_.add(new SeparatorField());
 		}
 		displayCredit(credit, location.getLastUpdated());
+	}
+	
+	private void displayAlerts(final Vector alerts)
+	{
+		DateFormat dateFormat = new SimpleDateFormat("ha E");
+		Observation lastAlert = null;
+		for (int i=0; i < alerts.size(); i++) {
+			Observation alert = (Observation)alerts.elementAt(i);
+			boolean last = false;
+			if (i == (alerts.size()-1)) {
+				// this is the last alert in the list!
+				last = true;
+			} else {
+				// it's not the last alert but the next one is different
+				Observation nextAlert = (Observation)alerts.elementAt(i+1);
+				last = (!nextAlert.value.equals(alert.value) || !nextAlert.units.equals(alert.units));
+			}
+			
+			if (last) {
+				// We need to print!
+				if (lastAlert != null) {
+					Date alertDate = lastAlert.time.startTime.getTime();
+					Date endDate = alert.time.startTime.getTime();
+					String startTimeStr = dateFormat.format(alertDate, new StringBuffer(), null).toString();
+					String endTimeStr = dateFormat.format(endDate, new StringBuffer(), null).toString();
+					RichTextField warningField = new RichTextField(alert.value+" "+alert.units+" "+startTimeStr+" - "+endTimeStr) {
+						public void paint(Graphics graphics) {
+							// Warning text is red
+							graphics.setColor(0xff0000);
+							super.paint(graphics);
+						}
+					};
+					mainScreen_.add(warningField);
+				} else {
+					Date alertDate = alert.time.startTime.getTime();
+					String alertTimeStr = dateFormat.format(alertDate, new StringBuffer(), null).toString();
+					mainScreen_.add(new RichTextField(alert.value+" "+alert.units+" "+alertTimeStr));
+				}
+				lastAlert = null;
+			} else if (lastAlert == null) {
+				lastAlert = alert;
+			}
+		}
+		if (alerts.size() == 0) {
+			mainScreen_.add(new RichTextField("No alerts or warnings"));
+		}
+		mainScreen_.add(new SeparatorField());
 	}
 	
 	private void displayCredit(final String who, final long when)
@@ -1554,6 +1624,88 @@ public class NwsClient extends UiApplication
 	
 	/**
 	 * When given a location this method will both fetch and display the NWS 
+	 * NDFD list of current watches and warnings.
+	 *
+	 * @param location The LocationData object for which to display the forecast 
+	 *
+	 */
+	private Hashtable getNWSAlerts(final LocationData location)
+	{
+		// The forecast observations we're interested in...
+		final String[] observations = { 
+			"hazards"
+		};
+		
+		// http://www.weather.gov/forecasts/xml/SOAP_server/ndfdXMLclient.php?whichClient=NDFDgen&lat=28.812831&lon=-97.004264&product=time-series&wwa=wwa
+		
+		// get NWS Weather
+		final URLEncodedPostData post = new URLEncodedPostData(null, true);
+		post.append("whichClient", "NDFDgen");
+		post.append("format", "12 hourly");
+		post.append("lat", Double.toString(location.getLat()));
+		post.append("lon", Double.toString(location.getLon()));
+		post.append("product", "time-series");
+		post.append("wwa", "wwa"); // Get watches and warnings
+		
+		// <hazard hazardCode="FW.W" phenomena="Red Flag" significance="Warning" hazardType="long duration">
+		
+		HttpHelper.Connection conn = null;
+		try {
+			conn = HttpHelper.getUrl(NWS_XML_URL+"?"+post.toString());
+			final Hashtable alerts = parseNDFD(conn.is, observations);
+			return alerts;
+		} catch (Exception e) {
+			throw new RuntimeException(e.getMessage());
+		} finally {
+			// Always close our http connection
+			if (conn != null)
+				conn.close();
+		}
+	}
+	
+	private Vector getAlerts(final LocationData location)
+	{
+		if (location.getCountry().equals("US") && options.useNws()) {
+			final Hashtable alerts = getNWSAlerts(location);
+			if (alerts.containsKey("hazards")) {
+				Hashtable types = (Hashtable)alerts.get("hazards");
+				if (types.containsKey("hazard-conditions")) {
+					return (Vector)types.get("hazard-conditions");
+				}
+			}
+		}
+		return new Vector();
+	}
+	
+	private boolean getDisplayNWSAlerts(final LocationData location)
+	{
+		boolean alert = false;
+		try {
+			final Vector alerts = getAlerts(location);
+			alert = (alerts.size() > 0);
+			
+			UiApplication.getUiApplication().invokeLater(new Runnable() {
+				public void run()
+				{
+					displayAlerts(alerts);
+				}
+			});
+			
+		} catch(Exception e) {
+			final String msg = e.getMessage();
+			UiApplication.getUiApplication().invokeLater(new Runnable() {
+				public void run()
+				{
+					LabelField errorLabel = new LabelField("Error getting NWS alerts: "+msg);
+					mainScreen_.add(errorLabel);
+				}
+			});
+		}
+		return alert;
+	}
+	
+	/**
+	 * When given a location this method will both fetch and display the NWS 
 	 * NDFD by-day forecast.  
 	 *
 	 * @param location The LocationData object for which to display the forecast 
@@ -1580,7 +1732,7 @@ public class NwsClient extends UiApplication
 		
 		HttpHelper.Connection conn = null;
 		try {
-			conn = HttpHelper.getUrl(NWS_URL+"?"+post.toString());
+			conn = HttpHelper.getUrl(NWS_DAY_URL+"?"+post.toString());
 			final Vector flattened = flattenNDFD(parseNDFD(conn.is, observations));
 			
 			UiApplication.getUiApplication().invokeLater(new Runnable() {
@@ -1612,8 +1764,9 @@ public class NwsClient extends UiApplication
 	 * data for the requested location.
 	 * @param location The LocationData object for which to get the forecast
 	 */
-	private void getDisplayNWSCurrentConditions(final LocationData location)
+	private String getDisplayNWSCurrentConditions(final LocationData location)
 	{
+		String temp = "";
 		if (location.getIcao().equals("")) {
 			UiApplication.getUiApplication().invokeLater(new Runnable() {
 				public void run()
@@ -1621,14 +1774,14 @@ public class NwsClient extends UiApplication
 					Dialog.alert("Could not find closest weather station for location.");
 				}
 			});
-			return;
+			return temp;
 		}
 		
 		try {
 			final Hashtable parsed = getParseCurrentConditions(location);
 			if (parsed != null && parsed.containsKey("temperature")) {
-				// Update the application icon
-				updateIcon((String)parsed.get("temperature"), 0);
+				// Remember the temperature to pass to the icon updater
+				temp = (String)parsed.get("temperature");
 			}
 			UiApplication.getUiApplication().invokeLater(new Runnable() {
 				public void run()
@@ -1646,6 +1799,7 @@ public class NwsClient extends UiApplication
 				}
 			});
 		}
+		return temp;
 	}
 	
 	/**
@@ -1677,8 +1831,12 @@ public class NwsClient extends UiApplication
 		String myCountry = location.getCountry();
 		if (myCountry.equals("US") && options.useNws()) {
 			// United States - Get NWS NDFD data 	
+			String temp = getDisplayNWSCurrentConditions(location);
 			
-			getDisplayNWSCurrentConditions(location);
+			// Alerts!
+			boolean alert = getDisplayNWSAlerts(location);
+			
+			updateIcon(temp, alert, 0);
 			
 			// Separate call for the forecast
 			getDisplayNWSForecast(location);
