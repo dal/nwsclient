@@ -1,0 +1,14 @@
+ABOUT#0="About";
+CURRENT_CONDITIONS#0="Current Conditions";
+CURRENT_CONDITIONS_AT#0="Current Conditions at";
+GETTING_LOCATION#0="Getting Location. . .";
+GETTING_WEATHER#0="Getting Weather. . .";
+GET_FORECAST#0="Get Forecast";
+LOCATION#0="Location";
+OPTIONS#0="Options";
+RECENT_LOCATIONS#0="Recent Locations";
+REFRESH#0="Refresh";
+SPLASH1#0="Copyright (C) 2009 by Doug Letterman";
+SPLASH2#0="This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.";
+SPLASH3#0="This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.";
+SPLASH4#0="NWSClient is not affiliated in any way with Google or the National Oceanic and Atmospheric Administration.";
