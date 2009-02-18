@@ -13,6 +13,8 @@ AutoRestart=0
 ]
 [DefFiles
 ]
+[DependencyFiles
+]
 [DependsOn
 ]
 Description=Retrieve current weather and forecast information from NOAA.
@@ -28,6 +30,9 @@ LocationData.java
 MessageScreen.java
 NotFoundException.java
 NwsClient.java
+nwsclient.rrc
+nwsclient.rrh
+nwsclient_en.rrc
 NwsClientOptions.java
 ParseError.java
 WeatherStation.java
