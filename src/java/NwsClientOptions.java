@@ -13,6 +13,7 @@ public class NwsClientOptions implements Persistable
 	//private boolean _autoRefresh = true;
 	private boolean _useNws = true;
 	private boolean _autoUpdateIcon = true;
+	private boolean _metric = false;
 	
 	public NwsClientOptions()
 	{
@@ -60,6 +61,11 @@ public class NwsClientOptions implements Persistable
 		return _autoUpdateIcon;
 	}
 	
+	public boolean metric()
+	{
+		return _metric;
+	}
+	
 	public void setUseNws(boolean use)
 	{
 		_useNws = use;
@@ -68,6 +74,11 @@ public class NwsClientOptions implements Persistable
 	public void setAutoUpdateIcon(boolean aui)
 	{
 		_autoUpdateIcon = aui;
+	}
+	
+	public void setMetric(boolean metric)
+	{
+		_metric = metric;
 	}
 
 }
