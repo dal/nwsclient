@@ -7,6 +7,7 @@ package com.renderfast.nwsclient;
 
 import java.util.*;
 import java.lang.Math.*;
+import net.rim.device.api.util.*; // for log()
 import java.io.*;
 import java.io.DataInputStream.*;
 
@@ -21,6 +22,75 @@ public class WeatherStation extends Object
 	public double lon;
 	public WeatherStation left;
 	public WeatherStation right;
+	
+	static double projectLat(double lat)
+	{
+		return MathUtilities.log(Math.tan(lat) + (1.0/Math.cos(lat)));
+	}
+	
+	double pow(double x, double y)
+	{   
+		// pow method from java.net
+		//Convert the real power to a fractional form
+		int den = 1024; //declare the denominator to be 1024
+	
+		/*Conveniently 2^10=1024, so taking the square root 10
+		times will yield our estimate for n.  In our example
+		n^3=8^2    n^1024 = 8^683.*/
+	
+		int num = (int)(y*den); // declare numerator
+	
+		int iterations = 10;  /*declare the number of square root
+			iterations associated with our denominator, 1024.*/
+	
+		double n = Double.MAX_VALUE; /* we initialize our         
+			estimate, setting it to max*/
+	
+		while( n >= Double.MAX_VALUE && iterations > 1) {
+			/*  We try to set our estimate equal to the right
+			hand side of the equation (e.g., 8^2048).  If this
+			number is too large, we will have to rescale. */
+	
+			n = x;
+					
+			for( int i=1; i < num; i++ )n*=x;
+	
+			/*here, we handle the condition where our starting
+			point is too large*/
+			if( n >= Double.MAX_VALUE ) {
+				iterations--;  /*reduce the iterations by one*/
+							
+				den = (int)(den / 2);  /*redefine the denominator*/
+							
+				num = (int)(y*den); //redefine the numerator
+			}
+		}
+			
+		/*************************************************
+		** We now have an appropriately sized right-hand-side.
+		** Starting with this estimate for n, we proceed.
+		**************************************************/
+			
+		for( int i = 0; i < iterations; i++ )
+		{
+			n = Math.sqrt(n);
+		}
+			
+		// Return our estimate
+		return n;
+	}
+
+	/*
+	static double sinh(double z)
+	{
+		return 0.5 * (pow(Math.E, z) + pow(Math.E, -1*z));
+	}
+	
+	static double unprojectLat(double y)
+	{
+		return Math.atan(sinh(y));
+	}
+	*/
 	
 	public WeatherStation() {
 		lat = 0.;
@@ -45,7 +115,7 @@ public class WeatherStation extends Object
 	
 	public String nearestNeighbor(double lat, double lon)
 	{
-		double[] point = { lat, lon };
+		double[] point = { projectLat(Math.toRadians(lat)), Math.toRadians(lon) };
 		WeatherStation best = null;
 		Vector result = this.nearestNeighbor(point, 0, best, Double.MAX_VALUE);
 		WeatherStation station = (WeatherStation)result.elementAt(0);
@@ -128,23 +198,34 @@ public class WeatherStation extends Object
 	
 	public static String findNearest(double lat, double lon)
 	{
+		InputStream inputStream = null;
 		try {
 			if (_root == null) {
 				WeatherStation tmp = new WeatherStation();
-				InputStream inputStream = tmp.getList(); 
+				inputStream = tmp.getList(); 
 				DataInputStream din = new DataInputStream(inputStream);
-				_root = _initTree(din);
-				inputStream.close();
+				int[] goUp = { 0 };
+				_root = _initTree(din, goUp);
 			}
 			return _root.nearestNeighbor(lat, lon);
 		} catch (IOException ioe) {
 			System.err.println("IO Error reading file");
+		} finally {
+			if (inputStream != null) {
+				try {
+					// Make sure we always close the weather stations list
+					inputStream.close();
+				} catch (Exception e) { }
+			}
 		}
 		return "";
 	}
 	
 	
-	public static WeatherStation _initTree(final DataInputStream din) throws IOException {
+	public static WeatherStation _initTree(final DataInputStream din, int[] goUp) throws IOException {
+		
+		// goUp codes: n > 0, n < 64 = left child, n levels up 
+		//             n > 64  = right child, n-64 levels up
 		
 		byte[] buff = new byte[4]; // weather station name
 		int bytes = din.read(buff);
@@ -154,16 +235,23 @@ public class WeatherStation extends Object
 		sta.name = new String(buff);
 		sta.lat = din.readDouble();
 		sta.lon = din.readDouble();
-		for (int i=0; i < 255; i++) {
-			char c = (char)din.readByte();
-			if (c == '<') {
-				sta.left = _initTree(din);
-			} else if (c == '>') {
-				sta.right = _initTree(din);
-			} else if (c == '\n') {
-				break;
-			}
+		
+		byte[] buff2 = new byte[1]; // weather station name
+		bytes = din.read(buff2);
+		if (bytes == -1)
+			return sta; // we're done
+		
+		goUp[0] = (int)buff2[0];
+		
+		if (goUp[0] == 0) {
+			sta.left = _initTree(din, goUp);
 		}
+		
+		if (goUp[0] == 0x40) {
+			sta.right = _initTree(din, goUp);
+		}
+		
+		goUp[0]--;
 		return sta;
 	}
 	
