@@ -270,9 +270,10 @@ public class NwsClient extends UiApplication
 			for (int i=0; i < locs.size(); i++) {
 				LocationData loc = (LocationData)locs.elementAt(i);
 				String address = loc.getLocality()+", "+loc.getArea();
+				if (loc.getArea().equals(""))
+					address = loc.getLocality(); 
 				if (!loc.getCountry().equals("US"))
 					address = loc.getLocality() + ", " + loc.getCountry();
-				//_recentLocationsListField.insert(i, address);
 				locArr[i] = address;
 			}
 			_recentLocationsChoiceField.setChoices(locArr);
@@ -499,6 +500,23 @@ public class NwsClient extends UiApplication
 								// Get the ICAO name of the weather station...
 								findNearestWeatherStation(newLoc);
 							}
+						} catch (AmbiguousLocationException e) {
+							// choose a more specific address?
+							invokeLater(new Runnable() {
+								public void run() {
+									// Remove the getting location message...
+									UiApplication.getUiApplication().popScreen(UiApplication.getUiApplication().getActiveScreen());
+									Dialog.alert("Choose a more specific address");
+								}
+							});
+						} catch (NotFoundException e) {
+							// Couldn't find it at all...
+							invokeLater(new Runnable() {
+								public void run() {
+									UiApplication.getUiApplication().popScreen(UiApplication.getUiApplication().getActiveScreen());
+									Dialog.alert("Could not find location");
+								}
+							});
 						} catch (Exception e) {
 							final String msg = e.getMessage();
 							UiApplication.getUiApplication().invokeLater(new Runnable() {
@@ -580,11 +598,18 @@ public class NwsClient extends UiApplication
 	
 	public static synchronized void updateIcon(String temp, boolean alert, int whichApp)
 	{
-		int lOffset = 22; // left offset
-		if (temp.length() >= 3) // move to the left if > 3 chars long
+		int lOffset = 22; // left offset, two chars long
+		if (temp.length() == 1) {
+			// Single digits!
+			lOffset = 25;
+		} else if (temp.length() == 3) { 
+			// move to the left if 3 chars long
 			lOffset = 20;
-		if (temp.length() > 3)
+		} else if (temp.length() > 3) {
+			// Crazy temperature!
+			lOffset = 20;
 			temp = "NWS";
+		}
 		Bitmap bg = Bitmap.getBitmapResource("icon.png");
 		Graphics gfx = new Graphics(bg);
 		FontFamily fontfam[] = FontFamily.getFontFamilies();
@@ -756,8 +781,11 @@ public class NwsClient extends UiApplication
 		public void run()
 		{
 			if (newLocField_.getText().length() > 0) {
-				if (checkDataConnectionAndWarn()) 
+				if (checkDataConnectionAndWarn()) {
+					if (optionsScreen_.isDisplayed())
+						optionsScreen_.storeInterfaceValues();
 					setNewLocation(newLocField_.getText());
+				}
 			} else {
 				Dialog.alert("Enter a valid city, State");
 			}
@@ -783,7 +811,7 @@ public class NwsClient extends UiApplication
 		return true;
 	}
 		
-	private LocationData getLocationData(String userAddress) {
+	private LocationData getLocationData(String userAddress) throws NotFoundException {
 		// Encode the URL (from net.rim.blackberry.api.browser)
 		URLEncodedPostData post = new URLEncodedPostData(null, true);
 		post.append("q", userAddress);
@@ -801,36 +829,22 @@ public class NwsClient extends UiApplication
 			LocationData loc = new LocationData();
 			loc.setUserAddress(userAddress);
 			
-			try {
-				loc.loadFromXml(document);
-				return loc;
-			} catch (NotFoundException e) {
-				invokeLater(new Runnable() {
-					public void run() {
-						Dialog.alert("Could not find location");
-					}
-				});
-			} catch (AmbiguousLocationException e) {
-				// choose a more specific address?
-				invokeLater(new Runnable() {
-					public void run() {
-						Dialog.alert("Choose a more specific address");
-					}
-				});
-			}
-		} catch (Exception e) {
-			final String msg = e.toString();
-			invokeLater(new Runnable() {
-				public void run() {
-					Dialog.alert("Error getting the location: '"+msg+"'");
-				}
-			});
+			loc.loadFromXml(document);
+			return loc;
+
+		} catch (IOException ioe) {
+			throw new RuntimeException(ioe.toString());
+		} catch (ParseError pe) {
+			throw new RuntimeException(pe.toString());
+		} catch (ParserConfigurationException pce) {
+			throw new RuntimeException(pce.toString());
+		} catch (SAXException se) {
+			throw new RuntimeException(se.toString());
 		} finally {
 			// Always close the http connection
 			if (conn != null)
 				conn.close();
 		}
-		return null;
 	}
 	
 	private void setNewLocation(final String userAddress)
@@ -1199,9 +1213,11 @@ public class NwsClient extends UiApplication
 	private synchronized void clearScreen()
 	{
 		// replace the screen with a new, clean one
-		popScreen(mainScreen_);
+		mainScreen_.deleteAll();
+		/*popScreen(mainScreen_);
 		mainScreen_ = new NwsClientScreen();
 		pushScreen(mainScreen_);
+		*/
 	}
 	
 	private void displayNWSCurrentConditions(LocationData location, Hashtable weather)
@@ -1209,7 +1225,8 @@ public class NwsClient extends UiApplication
 		clearScreen();
 		
 		String address = location.getLocality()+", "+location.getArea();
-		//locationLabel = new LabelField(address);
+		if (location.getArea().equals(""))
+			address = location.getLocality();
 		
 		if (weather == null) {
 			mainScreen_.add(new LabelField("Unable to fetch current conditions"));
@@ -1230,8 +1247,8 @@ public class NwsClient extends UiApplication
 		
 		// Grab some fonts...
 		FontFamily fontfam[] = FontFamily.getFontFamilies();
-		Font tinyFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, 11);
 		Font smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, 12);
+		Font tinyFont = smallFont.derive(Font.PLAIN, 11);
 
 		// Make the title label
 		mainScreen_.setTitle(new LabelField(address, LabelField.ELLIPSIS));
@@ -1276,6 +1293,12 @@ public class NwsClient extends UiApplication
 							};
 		HorizontalFieldManager row = null;
 		for (int i=0; i < fields.length; i++) {
+			
+			// LabelFields are dangerous -- check for crazy field length...
+			if (fields[i].length() > 128) {
+				// truncate if too long...
+				fields[i] = fields[i].substring(0,128);
+			}
 			
 			LabelField fld;
 			if (i==0 || i%2 == 0) {
@@ -1323,8 +1346,8 @@ public class NwsClient extends UiApplication
 		
 		// Grab some fonts...
 		FontFamily fontfam[] = FontFamily.getFontFamilies();
-		Font tinyFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, 11);
 		Font smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, 12);
+		Font tinyFont = smallFont.derive(Font.PLAIN, 11);
 
 		// Make the title label
 		mainScreen_.setTitle(new LabelField(address, LabelField.ELLIPSIS));
@@ -1374,6 +1397,13 @@ public class NwsClient extends UiApplication
 		
 		String fields[] = { "Relative humidity", humidity, "Wind", wind };
 		for (int i=0; i < fields.length; i++) {
+			
+			// LabelFields are dangerous -- check for crazy field length...
+			if (fields[i].length() > 128) {
+				// truncate if too long...
+				fields[i] = fields[i].substring(0,128);
+			}
+			
 			LabelField fld;
 			
 			if (i==0 || i%2 == 0) {
@@ -1558,6 +1588,8 @@ public class NwsClient extends UiApplication
 						"'City, Country,' i.e. \"London, GB\" for international locations.");
 				}
 				
+				String units = XmlHelper.getElementData(weather, "unit_system");
+				
 				// Get the current conditions
 				NodeList ccNodes = weather.getElementsByTagName("current_conditions");
 				if (ccNodes.getLength() == 0) 
@@ -1566,13 +1598,16 @@ public class NwsClient extends UiApplication
 				Hashtable cc = new Hashtable();
 				cc.put("city", XmlHelper.getElementData(weather, "city")); // Google city name...
 				cc.put("condition", XmlHelper.getElementData(ccEl, "condition"));
-				cc.put("temperature", XmlHelper.getElementData(ccEl, "temp_f"));
+				if (options.metric()) {
+					cc.put("temperature", XmlHelper.getElementData(ccEl, "temp_c"));
+				} else {
+					cc.put("temperature", XmlHelper.getElementData(ccEl, "temp_f"));
+				}
 				cc.put("relative_humidity", XmlHelper.getElementData(ccEl, "humidity"));
 				cc.put("wind", XmlHelper.getElementData(ccEl, "wind_condition"));
 				cc.put("icon_url", (GOOGLE_URL + XmlHelper.getElementData(ccEl, "icon")));
 				// Store the current conditions
 				gw.put("current_conditions", cc);
-				
 				
 				// Get the forecast data as a vector
 				Vector fc = new Vector();
@@ -1821,7 +1856,12 @@ public class NwsClient extends UiApplication
 			UiApplication.getUiApplication().invokeLater(new Runnable() {
 				public void run()
 				{
-					Dialog.alert("Could not find closest weather station for location.");
+					clearScreen();
+					// Can't get current conditions
+					mainScreen_.add(new RichTextField(
+						"Error getting current conditions: "+
+						"Could not find closest weather station for location.")
+					);
 				}
 			});
 			return temp;
@@ -1840,7 +1880,6 @@ public class NwsClient extends UiApplication
 				}
 			});
 		} catch (Exception ioe) {
-			// choose a more specific address?
 			final String msg = ioe.getMessage();
 			UiApplication.getUiApplication().invokeLater(new Runnable() {
 				public void run() {
@@ -1903,7 +1942,8 @@ public class NwsClient extends UiApplication
 	private void displayLicense()
 	{
 		MainScreen scrn = new MainScreen();
-		LabelField title = new LabelField("License", LabelField.ELLIPSIS | LabelField.USE_ALL_WIDTH);
+		LabelField title = new LabelField(resources_.getString(nwsclientResource.ABOUT), 
+			LabelField.ELLIPSIS | LabelField.USE_ALL_WIDTH);
 		scrn.setTitle(title);
 		displaySplash(scrn);
 		pushScreen(scrn);
@@ -1928,6 +1968,9 @@ public class NwsClient extends UiApplication
 		fnts[0] = fontfam[0].getFont(FontFamily.SCALABLE_FONT, 14);
 		fnts[1] = fnts[0].derive(Font.PLAIN, 12);
 		
+		int fgColors[] = {0x00, 0x00, 0x00, 0x00, 0x00};
+		int bgColors[] = {0xffffff, 0xffffff, 0xffffff, 0xffffff, 0xffffff};
+		
 		Bitmap bg = Bitmap.getBitmapResource("icon.png");
 		BitmapField icn = new BitmapField(bg, Field.FIELD_HCENTER);
 		vField.add(icn);
@@ -1941,9 +1984,9 @@ public class NwsClient extends UiApplication
 								splash[0].length() + splash[1].length() + splash[2].length() + splash[3].length()
 								};
 		
-		RichTextField text = new RichTextField(
+		ActiveRichTextField text = new ActiveRichTextField(
 			(splash[0] + splash[1] + splash[2] + splash[3]), 
-			off, attr, fnts, RichTextField.TEXT_ALIGN_HCENTER);
+			off, attr, fnts, fgColors, bgColors, RichTextField.TEXT_ALIGN_HCENTER);
 		vField.add(text);
 	}
 	
