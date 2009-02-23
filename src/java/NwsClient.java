@@ -168,13 +168,13 @@ public class NwsClient extends UiApplication
 		private ObjectChoiceField _recentLocationsChoiceField;
 		private CheckboxField _useNwsCheckBox;
 		private CheckboxField _autoUpdateIconCheckBox;
+		private CheckboxField _metricCheckBox;
 		
 		final class recentLocListener implements FieldChangeListener {
 			public void fieldChanged(Field field, int context) {
 				try {
 					ObjectChoiceField ocf = (ObjectChoiceField) field;
 					int idx = ocf.getSelectedIndex();
-					//Dialog.alert("Location selected: " + (String)ocf.getChoice(idx));
 					Vector locations = options.getLocations();
 					if (idx < locations.size()) {
 						final LocationData newLoc = (LocationData)locations.elementAt(idx);
@@ -233,6 +233,8 @@ public class NwsClient extends UiApplication
 			add(_useNwsCheckBox);
 			_autoUpdateIconCheckBox = new CheckboxField("Update the temperature when NWSClient is not running", options.autoUpdateIcon());
 			add(_autoUpdateIconCheckBox);
+			_metricCheckBox = new CheckboxField("Temperature in Celsius", options.metric());
+			add(_metricCheckBox);
 		}
 		
 		protected void makeMenu(Menu menu, int instance) {			
@@ -256,7 +258,7 @@ public class NwsClient extends UiApplication
 				return true; //I've absorbed this event, so return true
 			} else {
 				return super.keyChar(key, status, time);
-		}
+			}
 		}
 		
 		protected void setRecentLocationsChoiceField()
@@ -288,6 +290,11 @@ public class NwsClient extends UiApplication
 			if (autoUpdateIcon != _autoUpdateIconCheckBox.getChecked()) {
 				changed = true;
 				options.setAutoUpdateIcon(_autoUpdateIconCheckBox.getChecked());
+			}
+			boolean metric = options.metric();
+			if (metric != _metricCheckBox.getChecked()) {
+				changed = true;
+				options.setMetric(_metricCheckBox.getChecked());
 			}
 			
 			return changed;
@@ -553,7 +560,11 @@ public class NwsClient extends UiApplication
 		}
 	}
 	
-	
+	public static String fahrenheitToCelsius(int f)
+	{
+		int celsius = (int)(((double)f - 32.0) / 1.8 + 0.5);
+		return String.valueOf(celsius);
+	}
 	
 	public static synchronized void getOptionsFromStore()
 	{
@@ -930,8 +941,13 @@ public class NwsClient extends UiApplication
 				tempObs = getObservationByIndex(weather, "temperature", "minimum", i/2);
 			}
 			
-			if (tempObs != null)
-				temp = tempObs.value+" "+tempObs.units;
+			if (tempObs != null) {
+				if (options.metric() && tempObs.units.equals("Fahrenheit")) {
+					temp = fahrenheitToCelsius(Integer.valueOf(tempObs.value).intValue()) + " C";
+				} else {
+					temp = tempObs.value+" "+tempObs.units;
+				}
+			}
 			
 			// Get probability of precipitation
 			Observation popObs = getObservationByIndex(weather, "probability-of-precipitation", "12 hour", i); 
@@ -1098,10 +1114,12 @@ public class NwsClient extends UiApplication
 			
 			// weather "Partly Cloudy"
 			cc.put("condition", XmlHelper.getValue(root, "weather"));
-			// temperature_string "55 F (11 C)"
-			//cc.put("temperature", XmlHelper.getValue(root, "temperature_string"));
 			// temperature "55"
-			cc.put("temperature", XmlHelper.getValue(root, "temp_f"));
+			if (options.metric()) {
+				cc.put("temperature", XmlHelper.getValue(root, "temp_c"));
+			} else {
+				cc.put("temperature", XmlHelper.getValue(root, "temp_f"));
+			}
 			// relative_humidity "65"
 			cc.put("relative_humidity", XmlHelper.getValue(root, "relative_humidity"));
 			// location "Oakland, CA"
@@ -1565,8 +1583,15 @@ public class NwsClient extends UiApplication
 					
 					day.put("day_of_week", XmlHelper.getElementData(dayEl, "day_of_week")); //dayEl.getAttribute("day_of_week")
 					day.put("condition", XmlHelper.getElementData(dayEl, "condition"));
-					day.put("temperature", (XmlHelper.getElementData(dayEl, "high") + 
-						" low: " + XmlHelper.getElementData(dayEl, "low")));
+					String hi = XmlHelper.getElementData(dayEl, "high");
+					String lo = XmlHelper.getElementData(dayEl, "low");
+					if (options.metric() && !units.equals("SI")) {
+						// Convert to metric...
+						hi = fahrenheitToCelsius(Integer.valueOf(hi).intValue());
+						lo = fahrenheitToCelsius(Integer.valueOf(lo).intValue());
+					}
+					day.put("temperature", (hi + " low: " + lo));
+					// Get the icon url
 					day.put("icon_url", (GOOGLE_URL + XmlHelper.getElementData(dayEl, "icon")));
 					
 					fc.addElement(day);
@@ -1607,7 +1632,7 @@ public class NwsClient extends UiApplication
 		// Get some new Google weather
 		URLEncodedPostData post = new URLEncodedPostData(null, true);
 		post.append("weather", location.getLocality()+", "+location.getCountry());
-		post.append("hl", "en");
+		post.append("hl", "en"); // English gives us imperial units
 		HttpHelper.Connection conn = null;
 		try {
 			conn = HttpHelper.getUrl(GOOGLE_WEATHER_URL+"?"+post.toString());
