@@ -37,7 +37,7 @@ public class LocationData implements Persistable
 	// Locality 
 	private String _locality;
 	
-	// Lattitude
+	// Latitude
 	private double _lat;
 	// Longitude
 	private double _lon;
@@ -47,6 +47,10 @@ public class LocationData implements Persistable
 	
 	// Nearest weather station id
 	private String _icao;
+	
+	private double _icaoLat;
+	
+	private double _icaoLon;
 	
 	public LocationData()
 	{
@@ -102,6 +106,16 @@ public class LocationData implements Persistable
 		return _icao;
 	}
 	
+	public double getIcaoLat()
+	{
+		return _icaoLat;
+	}
+	
+	public double getIcaoLon()
+	{
+		return _icaoLon;
+	}
+	
 	public long getLastUpdated()
 	{
 		return lastUpdated_;
@@ -140,6 +154,16 @@ public class LocationData implements Persistable
 	public void setIcao(String icao)
 	{
 		_icao = icao;
+	}
+	
+	public void setIcaoLat(double lat)
+	{
+		_icaoLat = lat;
+	}
+	
+	public void setIcaoLon(double lon)
+	{
+		_icaoLon = lon;
 	}
 	
 	public void setLastUpdated(long time)
@@ -201,7 +225,6 @@ public class LocationData implements Persistable
 		// Now get lat/lon
 		String coordinates = XmlHelper.getValue(root, "coordinates");
 		int firstCommaPos = coordinates.indexOf(',');
-		System.err.println("Coordinate string is: "+coordinates);
 		// longitude is listed first
 		if (firstCommaPos != -1) {
 			// Google puts a second comma in the coordinate string...
