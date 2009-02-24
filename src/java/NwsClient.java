@@ -15,9 +15,11 @@ import net.rim.device.api.ui.component.*;
 import net.rim.device.api.ui.component.ChoiceField.*;
 import net.rim.blackberry.api.homescreen.*; // for updating the application icon
 import net.rim.device.api.i18n.SimpleDateFormat.*;
+import javax.microedition.global.*;
 import javax.microedition.io.*;
 import java.util.*;
 import java.io.*;
+import java.lang.Math.*;
 import net.rim.device.api.util.*;
 import org.w3c.dom.*;
 import org.xml.sax.*; // for SAXException
@@ -806,8 +808,10 @@ public class NwsClient extends UiApplication
 	
 	private boolean findNearestWeatherStation(LocationData loc)
 	{
-		String weatherStation = WeatherStation.findNearest(loc.getLat(), loc.getLon());
-		loc.setIcao(weatherStation);
+		WeatherStation weatherStation = WeatherStation.findNearest(loc.getLat(), loc.getLon());
+		loc.setIcao(weatherStation.getName());
+		loc.setIcaoLat(weatherStation.getLat()); // latitude in radians
+		loc.setIcaoLon(weatherStation.getLon()); // longitude in radians
 		return true;
 	}
 		
@@ -1233,10 +1237,22 @@ public class NwsClient extends UiApplication
 			return;
 		}
 		
+		String station = (String)weather.get("location");
+		
+		double range = WeatherStation.greatCircleDistance(
+			Math.toRadians(location.getLat()), Math.toRadians(location.getLon()),
+			location.getIcaoLat(), location.getIcaoLon());
+		
+		String bearing = WeatherStation.bearing(
+			Math.toRadians(location.getLat()), Math.toRadians(location.getLon()),
+			location.getIcaoLat(), location.getIcaoLon());
+		
+		Formatter fmt = new Formatter(null);
+		String rangeBearing = fmt.formatNumber(range, 1) + "mi "+bearing+" of forecast position";
+		
 		String conditionsLabel = (String)weather.get("condition");
 		String temp = (String)weather.get("temperature");
 		String humidity = (String)weather.get("relative_humidity") + "%";
-		String station = (String)weather.get("location");
 		String condIconUrl = (String)weather.get("icon_url");
 		String wind = (String)weather.get("wind");
 		String pressure = (String)weather.get("pressure");
@@ -1266,6 +1282,11 @@ public class NwsClient extends UiApplication
 		// The human-readable name of the station to the right
 		lbl = new LabelField(station, Field.FIELD_RIGHT);
 		lbl.setFont(smallFont);
+		main.add(lbl);
+		
+		// Range/bearing to the weatherstation
+		lbl = new LabelField(rangeBearing, Field.FIELD_RIGHT);
+		lbl.setFont(tinyFont);
 		main.add(lbl);
 		
 		HorizontalFieldManager topHField = new HorizontalFieldManager();
@@ -1459,7 +1480,6 @@ public class NwsClient extends UiApplication
 			BitmapField forecastBitmap = new BitmapField();
 			
 			if (!iconUrl.equals("")) {
-				// DEBUG DEBUG DEBUG
 				bitmapProvider_.getBitmap(iconUrl, forecastBitmap);
 			}
 			
