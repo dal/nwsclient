@@ -15,6 +15,7 @@ import net.rim.device.api.ui.component.*;
 import net.rim.device.api.ui.component.ChoiceField.*;
 import net.rim.blackberry.api.homescreen.*; // for updating the application icon
 import net.rim.device.api.i18n.SimpleDateFormat.*;
+import net.rim.device.api.system.ApplicationDescriptor.*;
 import javax.microedition.global.*;
 import javax.microedition.io.*;
 import java.util.*;
@@ -427,7 +428,8 @@ public class NwsClient extends UiApplication
 				
 				final long now = System.currentTimeMillis();
 				final LocationData location = options.getCurrentLocation();
-				if (location != null && (now - location.getLastUpdated()) > UPDATE_INTERVAL) {
+				if (location != null && (now - location.getLastUpdated()) > UPDATE_INTERVAL
+					&& RadioInfo.isDataServiceOperational()) {
 					getDisplayWeather(location);
 					setLastUpdated(now);
 				} else {
@@ -740,7 +742,7 @@ public class NwsClient extends UiApplication
 		if (!RadioInfo.isDataServiceOperational()) {
 			invokeLater(new Runnable() {
 				public void run() {
-					Dialog.alert("Data service unavailable. Try again later.");
+					Dialog.alert(resources_.getString(nwsclientResource.NO_DATA));
 				}
 			});
 			return false;
@@ -1132,6 +1134,8 @@ public class NwsClient extends UiApplication
 			
 			// weather "Partly Cloudy"
 			cc.put("condition", XmlHelper.getValue(root, "weather"));
+			// observation_time "Last Updated on Feb 24, 10:53 pm PST"
+			cc.put("observation_time", XmlHelper.getValueIfExists(root, "observation_time"));
 			// temperature "55"
 			if (options.metric()) {
 				cc.put("temperature", XmlHelper.getValue(root, "temp_c"));
@@ -1139,21 +1143,21 @@ public class NwsClient extends UiApplication
 				cc.put("temperature", XmlHelper.getValue(root, "temp_f"));
 			}
 			// relative_humidity "65"
-			cc.put("relative_humidity", XmlHelper.getValue(root, "relative_humidity"));
+			cc.put("relative_humidity", XmlHelper.getValueIfExists(root, "relative_humidity"));
 			// location "Oakland, CA"
-			cc.put("location", XmlHelper.getValue(root, "location"));
+			cc.put("location", XmlHelper.getValueIfExists(root, "location"));
 			// wind_str "From the west at 12mph"
-			cc.put("wind", XmlHelper.getValue(root, "wind_string")); 
+			cc.put("wind", XmlHelper.getValueIfExists(root, "wind_string")); 
 			// pressure_string "29.90" (1012.4 mb)"
-			cc.put("pressure", XmlHelper.getValue(root, "pressure_string"));
+			cc.put("pressure", XmlHelper.getValueIfExists(root, "pressure_string"));
 			// dewpoint_string "27 F (-3 C)"
-			cc.put("dewpoint", XmlHelper.getValue(root, "dewpoint_string"));
+			cc.put("dewpoint", XmlHelper.getValueIfExists(root, "dewpoint_string"));
 			// heat_index_string "NA"
-			cc.put("heat_index", XmlHelper.getValue(root, "heat_index_string"));
+			cc.put("heat_index", XmlHelper.getValueIfExists(root, "heat_index_string"));
 			// windchill_string "31 F (-1 C)"
-			cc.put("windchill", XmlHelper.getValue(root, "windchill_string"));
+			cc.put("windchill", XmlHelper.getValueIfExists(root, "windchill_string"));
 			// "visibility" 
-			cc.put("visibility", XmlHelper.getValue(root, "visibility_mi"));
+			cc.put("visibility", XmlHelper.getValueIfExists(root, "visibility_mi"));
 			
 			String iconUrl = XmlHelper.getValue(root, "icon_url_base") +
 								XmlHelper.getValue(root, "icon_url_name");
@@ -1252,6 +1256,7 @@ public class NwsClient extends UiApplication
 		
 		String conditionsLabel = (String)weather.get("condition");
 		String temp = (String)weather.get("temperature");
+		String observation_time = (String)weather.get("observation_time");
 		String humidity = (String)weather.get("relative_humidity") + "%";
 		String condIconUrl = (String)weather.get("icon_url");
 		String wind = (String)weather.get("wind");
@@ -1274,7 +1279,7 @@ public class NwsClient extends UiApplication
 		
 		// Current Conditions Label
 		LabelField lbl = new LabelField(resources_.getString(nwsclientResource.CURRENT_CONDITIONS_AT)+
-									" "+location.getIcao(), LabelField.ELLIPSIS);
+									" "+location.getIcao());
 		Font fnt = lbl.getFont().derive(Font.BOLD);
 		lbl.setFont(fnt);
 		main.add(lbl);
@@ -1302,9 +1307,14 @@ public class NwsClient extends UiApplication
 		VerticalFieldManager topRightCol = new VerticalFieldManager();
 		topHField.add(topRightCol);
 		
-		// Show max/min temps
+		// Show the current conditions
 		topRightCol.add(new RichTextField(conditionsLabel));
+		// Show the temperature
 		topRightCol.add(new RichTextField("Temp: "+temp));
+		// Observation time
+		RichTextField obsTime = new RichTextField(observation_time);
+		obsTime.setFont(tinyFont);
+		topRightCol.add(obsTime);
 		
 		String fields[] = { 
 							"Relative humidity", humidity, "Wind", wind, 
@@ -1977,8 +1987,10 @@ public class NwsClient extends UiApplication
 		VerticalFieldManager vField = new VerticalFieldManager(Field.FIELD_VCENTER | Field.USE_ALL_WIDTH | Field.USE_ALL_HEIGHT);
 		scrn.add(vField);
 		String splash[] = new String[4];
-		splash[0] = "NWSClient\n\n";
-		splash[1] = resources_.getString(nwsclientResource.SPLASH1)+"\n";
+		ApplicationDescriptor ad = ApplicationDescriptor.currentApplicationDescriptor();
+		splash[0] = "NWSClient\n";
+		splash[1] = "version " + ad.getVersion() + "\n" + 
+					resources_.getString(nwsclientResource.SPLASH1)+"\n";
 		splash[2] = resources_.getString(nwsclientResource.SPLASH2)+"\n";
 		splash[3] = resources_.getString(nwsclientResource.SPLASH3) +"\n"+
 					resources_.getString(nwsclientResource.SPLASH4);
