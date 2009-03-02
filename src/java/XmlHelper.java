@@ -19,6 +19,15 @@ public class XmlHelper
 		return getNodeText(myNode);
 	}
 	
+	public static String getValueIfExists(Node root, String tagName)
+	{
+		try {
+			return getValue(root, tagName);
+		} catch (ParseError pe) {
+			return "";
+		}
+	}
+	
 	public static Node getNode(Node root, String tagName) throws ParseError
 	{
 		if (root.getNodeType() != Node.ELEMENT_NODE)
