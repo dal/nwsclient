@@ -1,7 +1,19 @@
 /**
- * A NDFD Weather data client
+ * Copyright (c) 2009 Doug Letterman
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
- 
 package com.renderfast.nwsclient;
 
 import net.rim.device.api.ui.*;
@@ -26,14 +38,6 @@ import org.w3c.dom.*;
 import org.xml.sax.*; // for SAXException
 
 import com.renderfast.nwsclient.resource.nwsclientResource;
-
-/*
- * For summaries:
- * http://www.weather.gov/forecasts/xml/SOAP_server/ndfdSOAPclientByDay.php?whichClient=NDFDgenByDay&lat=37.8381770&lon=-122.2&format=12+hourly&startDate=2008-11-21&numDays=10
- *
- * For detail:
- * http://www.weather.gov/forecasts/xml/SOAP_server/ndfdXMLclient.php?%20whichClient=NDFDgen&lat=37.8381770&lon=-122.2963890&product=time-series
- */
 
 public class NwsClient extends UiApplication
 {
@@ -316,6 +320,11 @@ public class NwsClient extends UiApplication
 		
 	};
 	
+	/**
+	 * Thread invoked by the alternate, non-gui entry point to 
+	 * NWSClient. It will fetch the temperature and any weather alerts (US only)
+	 * and update the application icon accordingly.
+	 */
 	class IconUpdaterThread extends Thread
 	{
 		private LocationData location_ = null;
@@ -332,8 +341,7 @@ public class NwsClient extends UiApplication
 		
 		public void doUpdateIcon()
 		{
-			//System.err.println("Setting icon for "+location_.getCountry()+" "+location_.getArea()+" "+location_.getLocality());
-			// Get our current temp
+			// Get the current temperature
 			try {
 				Hashtable conditions = getParseCurrentConditions(location_);
 				Vector alerts = getAlerts(location_);
@@ -354,6 +362,10 @@ public class NwsClient extends UiApplication
 			
 		}
 		
+		/**
+		 * Fire every four seconds and decide if we need to update the 
+		 * application on the home screen.
+		 */
 		public void run()
 		{
 			for(;;) {
@@ -450,6 +462,10 @@ public class NwsClient extends UiApplication
 		
 	}
 	
+	/**
+	 * This thread also fires every second to see if the user has supplied a 
+	 * new location whose coordinates we need to find.
+	 */
 	class LocationFinder extends Thread
 	{
 		String input_ = null;
@@ -677,14 +693,12 @@ public class NwsClient extends UiApplication
 	{	
 		if (autostart) {
 			foreground_ = false;
-			//System.err.println("NWSClient: In autostart");
-			//alternate entry point
+			// Alternate entry point
 			ApplicationManager myApp = ApplicationManager.getApplicationManager();
 			boolean keepGoing = true;
 			while(keepGoing) {
 				if (myApp.inStartup()) {
 					//The BlackBerry is still starting up, sleep for 1 second.
-					//System.err.println("autostart sleeping...");
 					try {
 						Thread.sleep(1000);
 					} catch (Exception ex) {
@@ -864,7 +878,7 @@ public class NwsClient extends UiApplication
 		// implement the 'parse' method. Lame.
 		String part;
 		Calendar cal = Calendar.getInstance(); // new calendar object
-		//			 > 0123456789012345678901234 <
+		
 		// Time string looks like '2008-10-12T20:00:00-04:00'
 		// Year
 		part = timeStr.substring(0,4); // strip off the time zone information
@@ -988,7 +1002,10 @@ public class NwsClient extends UiApplication
 		return fc;
 	}
 
-		
+	/**
+	 * Parse an NDFD XML response element and return the supplied observations 
+	 * in a hash indexed by observation time.
+	 */
 	private Hashtable getNDFDObservations(Element root, Hashtable times, 
 											final String[] observations) 
 	{
@@ -1174,6 +1191,13 @@ public class NwsClient extends UiApplication
 		return cc;
 	}
 	
+	/**
+	 * Parse an inputstream containing an NDFD XML response and return a 
+	 * hashtable of observations indexed by time.
+	 * @param is A valid XML InputStream
+	 * @param observations An array of observation names to fetch
+	 * @return A hashtable of forecast observations indexed by time
+	 */
 	private Hashtable parseNDFD(InputStream is, final String[] observations) 
 	{
 		Hashtable fc = new Hashtable();
@@ -1220,12 +1244,7 @@ public class NwsClient extends UiApplication
 		
 	private synchronized void clearScreen()
 	{
-		// replace the screen with a new, clean one
 		mainScreen_.deleteAll();
-		/*popScreen(mainScreen_);
-		mainScreen_ = new NwsClientScreen();
-		pushScreen(mainScreen_);
-		*/
 	}
 	
 	private void displayNWSCurrentConditions(LocationData location, Hashtable weather)
