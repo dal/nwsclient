@@ -1,5 +1,9 @@
 ## RIM Java Development Environment
 # RIM Project file
+#
+# This file is generated and managed by BlackBerry developer tools.
+# It SHOULD NOT BE modified manually.
+#
 AddOn=0
 AlwaysBuild=0
 [AlxImports
@@ -32,15 +36,17 @@ img\icon.png
 ]
 Listing=0
 MidletClass=gui
-Options=-quiet
+Options=-quiet 
 OutputFileName=nwsclientui
 [PackageProtection
 ]
 RibbonPosition=0
+[RolloverIcons
+]
 RunOnStartup=0
 StartupTier=7
 SystemModule=0
 Title=NWSClient
 Type=3
 Vendor=Renderfast
-Version=1.0
+Version=1.01
