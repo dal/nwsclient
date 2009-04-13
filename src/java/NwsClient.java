@@ -68,8 +68,6 @@ public class NwsClient extends UiApplication
 	// Instance variables
 	
 	private Thread workerThread_;
-
-	private LocationFinder locationFinder_;
 	
 	private BitmapProvider bitmapProvider_;
 	
@@ -422,153 +420,124 @@ public class NwsClient extends UiApplication
 	 * the weather display.
 	 * 
 	 */
-	class WorkerThread extends Thread
+	class WorkerThread implements Runnable
 	{
-		boolean stop_ = false;
 		
-		WorkerThread()
+		LocationData location_;
+		String newLocationInput_;
+		
+		WorkerThread(String newLocation, LocationData oldLocation)
+		{
+			newLocationInput_ = newLocation;
+			location_ = oldLocation;
+		}
+		
+		WorkerThread(LocationData location)
 		{
 			// constructor does nothing
+			newLocationInput_ = null;
+			location_ = location;
+		}
+		
+		public void findNewLocation()
+		{
+			UiApplication.getUiApplication().invokeLater(new Runnable() {
+				public void run() {
+					final MessageScreen msgScreen = new MessageScreen("Getting location...");
+					pushScreen(msgScreen);
+				}
+			});
+			LocationData newLoc = null;
+			try {
+				newLoc = getLocationData(newLocationInput_);
+				if (newLoc.getCountry().equals("US")) {
+					// Get the ICAO name of the weather station...
+					findNearestWeatherStation(newLoc);
+				}
+			} catch (AmbiguousLocationException e) {
+				// choose a more specific address?
+				invokeLater(new Runnable() {
+					public void run() {
+						// Remove the getting location message...
+						UiApplication.getUiApplication().popScreen(UiApplication.getUiApplication().getActiveScreen());
+						Dialog.alert("Choose a more specific address");
+					}
+				});
+			} catch (NotFoundException e) {
+				// Couldn't find it at all...
+				invokeLater(new Runnable() {
+					public void run() {
+						UiApplication.getUiApplication().popScreen(UiApplication.getUiApplication().getActiveScreen());
+						Dialog.alert("Could not find location");
+					}
+				});
+			} catch (Exception e) {
+				final String msg = e.getMessage();
+				UiApplication.getUiApplication().invokeLater(new Runnable() {
+					public void run() {
+						// Remove the getting location message...
+						UiApplication.getUiApplication().popScreen(UiApplication.getUiApplication().getActiveScreen());
+						Dialog.alert("Error getting location: "+msg);
+					}
+				});
+			}
+			
+			if (newLoc != null) {
+				
+				UiApplication.getUiApplication().invokeLater(new Runnable() {
+					public void run() {
+						// Remove the getting location message...
+						UiApplication.getUiApplication().popScreen(UiApplication.getUiApplication().getActiveScreen());
+					}
+				});
+				
+				UiApplication.getUiApplication().invokeLater(new Runnable() {
+					public void run() {
+						if (optionsScreen_.isDisplayed())
+							optionsScreen_.close();
+					}
+				});
+				options.setCurrentLocation(newLoc);
+				store.setContents(options);
+				store.commit();
+				location_ = newLoc;
+			}
 		}
 		
 		public void run()
 		{
 			for(;;) {
+								
+				if (newLocationInput_ != null) {
+					findNewLocation();
+					newLocationInput_ = null;
+				}
 				
-				if (stop_)
+				// check for interrupt
+				try {
+					Thread.sleep(1); // sleep for a millisecond...
+				} catch (InterruptedException e) {
+					System.err.println(e.toString());
+					return;
+				}
+				
+				if (location_ == null)
 					return;
 				
-				final long now = System.currentTimeMillis();
-				final LocationData location = options.getCurrentLocation();
-				if (location != null && (now - location.getLastUpdated()) > UPDATE_INTERVAL
-					&& RadioInfo.isDataServiceOperational()) {
-					getDisplayWeather(location);
-					setLastUpdated(now);
+				if (RadioInfo.isDataServiceOperational()) {
+					getDisplayWeather(location_);
+					try {
+						Thread.sleep(1800000); // sleep for 30 minutes
+					} catch (InterruptedException e) {
+						System.err.println(e.toString());
+						return;
+					}
 				} else {
 					try {
-						sleep(1000); // sleep for a second...
+						Thread.sleep(4000); // sleep for 4 seconds
 					} catch (InterruptedException e) {
 						System.err.println(e.toString());
 						return;
-					}
-				}
-			}
-		}
-		
-		public void stop()
-		{
-			stop_ = true;
-		}
-		
-	}
-	
-	/**
-	 * This thread also fires every second to see if the user has supplied a 
-	 * new location whose coordinates we need to find.
-	 */
-	class LocationFinder extends Thread
-	{
-		String input_ = null;
-		boolean start_ = false;
-		boolean stop_ = false;
-		
-		public void find(String userAddress)
-		{
-			if ( start_ ) {
-				Dialog.alert("Already finding location");
-				synchronized(this) {
-					input_ = userAddress;
-				}
-			} else {
-				synchronized(this) {
-					if (start_) {
-						Dialog.alert("Already finding location");	
-					} else {
-						start_ = true;
-						input_ = userAddress;
-					}
-				}
-			}
-		}
-		
-		public void run()
-		{
-			for (;;) {
-				while (!start_ && !stop_) {
-					try {
-						sleep(1000); 
-					} catch (InterruptedException e) {
-						System.err.println(e.toString());
-						return;
-					}
-					
-					if (stop_) {
-						return;
-					}
-					
-					if (start_ && input_ != null) {
-						UiApplication.getUiApplication().invokeLater(new Runnable() {
-							public void run() {
-								final MessageScreen msgScreen = new MessageScreen("Getting location...");
-								pushScreen(msgScreen);
-							}
-						});
-						LocationData newLoc = null;
-						try {
-							newLoc = getLocationData(input_);
-							if (newLoc.getCountry().equals("US")) {
-								// Get the ICAO name of the weather station...
-								findNearestWeatherStation(newLoc);
-							}
-						} catch (AmbiguousLocationException e) {
-							// choose a more specific address?
-							invokeLater(new Runnable() {
-								public void run() {
-									// Remove the getting location message...
-									UiApplication.getUiApplication().popScreen(UiApplication.getUiApplication().getActiveScreen());
-									Dialog.alert("Choose a more specific address");
-								}
-							});
-						} catch (NotFoundException e) {
-							// Couldn't find it at all...
-							invokeLater(new Runnable() {
-								public void run() {
-									UiApplication.getUiApplication().popScreen(UiApplication.getUiApplication().getActiveScreen());
-									Dialog.alert("Could not find location");
-								}
-							});
-						} catch (Exception e) {
-							final String msg = e.getMessage();
-							UiApplication.getUiApplication().invokeLater(new Runnable() {
-								public void run() {
-									// Remove the getting location message...
-									UiApplication.getUiApplication().popScreen(UiApplication.getUiApplication().getActiveScreen());
-									Dialog.alert("Error getting location: "+msg);
-								}
-							});
-						}
-						
-						if (newLoc != null) {
-							
-							UiApplication.getUiApplication().invokeLater(new Runnable() {
-								public void run() {
-									// Remove the getting location message...
-									UiApplication.getUiApplication().popScreen(UiApplication.getUiApplication().getActiveScreen());
-								}
-							});
-							
-							UiApplication.getUiApplication().invokeLater(new Runnable() {
-								public void run() {
-									if (optionsScreen_.isDisplayed())
-										optionsScreen_.close();
-								}
-							});
-							options.setCurrentLocation(newLoc);
-							store.setContents(options);
-							store.commit();
-							refreshWeather();
-						}
-						start_ = false;
 					}
 				}
 			}
@@ -727,15 +696,10 @@ public class NwsClient extends UiApplication
 			// Don't need to start the bitmpaProvider--it will start on demand
 			this.bitmapProvider_ = new BitmapProvider();
 			
-			this.workerThread_ = this.new WorkerThread();
-			this.workerThread_.start();
-			
-			this.locationFinder_ = this.new LocationFinder();
-			this.locationFinder_.start();
-			
 			// if no location go to the options screen
 			if (options.getCurrentLocation() != null) {
-				refreshWeather();
+				workerThread_ = new Thread(new WorkerThread(options.getCurrentLocation()));
+				workerThread_.start();
 			} else {
 				viewOptions();
 			}
@@ -764,18 +728,25 @@ public class NwsClient extends UiApplication
 		return true;
 	}
 	
-	private void refreshWeather()
+	private void killWorker()
 	{
-		setLastUpdated(0);
+		// Kill the worker thread and start a new one
+		if (this.workerThread_ != null && this.workerThread_.isAlive()) {
+			this.workerThread_.interrupt();
+			try {
+				this.workerThread_.join();
+			} catch (InterruptedException e) {
+				// ...
+			}
+		}
+		this.workerThread_ = null;
 	}
 	
-	private synchronized void setLastUpdated(long lastUpdated)
+	private void refreshWeather()
 	{
-		// This will effectively notify the Icon Updater thread that we've updated
-		LocationData loc = options.getCurrentLocation();
-		if (loc != null) {
-			loc.setLastUpdated(lastUpdated);
-		}
+		killWorker();
+		this.workerThread_ = new Thread(new WorkerThread(options.getCurrentLocation()));
+		this.workerThread_.start();
 	}
 	
 	// menu items
@@ -869,7 +840,9 @@ public class NwsClient extends UiApplication
 	
 	private void setNewLocation(final String userAddress)
 	{
-		locationFinder_.find(userAddress);
+		killWorker();
+		this.workerThread_ = new Thread(new WorkerThread(userAddress, options.getCurrentLocation())); // old location, in case of failure);
+		this.workerThread_.start();
 	}
 	
 	private Calendar parseTime(String timeStr)
@@ -1295,6 +1268,17 @@ public class NwsClient extends UiApplication
 		
 		VerticalFieldManager main = new VerticalFieldManager(Manager.USE_ALL_WIDTH);
 		mainScreen_.add(main);
+		
+		// Test test 
+		LinkField link = new LinkField("Test link!");
+		FieldChangeListener listener = new FieldChangeListener() {
+			public void fieldChanged(Field field, int context) {
+				LinkField linkField = (LinkField) field;
+				Dialog.alert("Link pressed: " + linkField.getLabel());
+			}
+		};
+		link.setChangeListener(listener);
+		main.add(link);
 		
 		// Current Conditions Label
 		LabelField lbl = new LabelField(resources_.getString(nwsclientResource.CURRENT_CONDITIONS_AT)+
