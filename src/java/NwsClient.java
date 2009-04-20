@@ -69,6 +69,10 @@ public class NwsClient extends UiApplication
 	
 	private Thread workerThread_;
 	
+	private String newLocation_;
+	
+	private LocationData currentLocation_;
+	
 	private BitmapProvider bitmapProvider_;
 	
 	private NwsClientScreen mainScreen_;
@@ -323,18 +327,14 @@ public class NwsClient extends UiApplication
 	 * NWSClient. It will fetch the temperature and any weather alerts (US only)
 	 * and update the application icon accordingly.
 	 */
-	class IconUpdaterThread extends Thread
+	class IconUpdaterThread implements Runnable
 	{
-		private LocationData location_ = null;
+		
+		private LocationData location_;
 		
 		IconUpdaterThread()
 		{
 			// empty constructor
-		}
-		
-		public synchronized void setLocation(LocationData loc)
-		{
-			location_ = loc;
 		}
 		
 		public void doUpdateIcon()
@@ -360,10 +360,6 @@ public class NwsClient extends UiApplication
 			
 		}
 		
-		/**
-		 * Fire every four seconds and decide if we need to update the 
-		 * application on the home screen.
-		 */
 		public void run()
 		{
 			for(;;) {
@@ -374,8 +370,8 @@ public class NwsClient extends UiApplication
 					if (options.autoUpdateIcon() == false 
 						|| !RadioInfo.isDataServiceOperational()) 
 					{
-						// do nothing but sleep
-						sleep(4000);
+						// do nothing but sleep for ten second intervals
+						Thread.sleep(10000);
 						continue;
 					}
 					
@@ -385,13 +381,11 @@ public class NwsClient extends UiApplication
 					if (newLoc != null && (newLoc != location_ 
 						|| newLoc.getLastUpdated() != location_.getLastUpdated())) 
 					{
-						synchronized(this) {
-							setLocation(newLoc);
-						}
+						location_ = newLoc;
 					}
 					
 					if (location_ == null) {
-						sleep(4000);
+						Thread.sleep(10000);
 						continue;
 					}
 					
@@ -405,7 +399,7 @@ public class NwsClient extends UiApplication
 						location_.setLastUpdated(now);
 					} else {
 						// Wait four seconds
-						sleep(4000);
+						Thread.sleep(UPDATE_INTERVAL);
 					}
 				} catch (InterruptedException ie) {
 					return;
@@ -416,30 +410,13 @@ public class NwsClient extends UiApplication
 	}
 	
 	/**
-	 * This thread fires every second and decides whether we need to update 
-	 * the weather display.
-	 * 
+	 * This does the work of connecting to the data service and getting updated
+	 * forecasts and current conditions in a separate thread from the UI.
 	 */
 	class WorkerThread implements Runnable
 	{
 		
-		LocationData location_;
-		String newLocationInput_;
-		
-		WorkerThread(String newLocation, LocationData oldLocation)
-		{
-			newLocationInput_ = newLocation;
-			location_ = oldLocation;
-		}
-		
-		WorkerThread(LocationData location)
-		{
-			// constructor does nothing
-			newLocationInput_ = null;
-			location_ = location;
-		}
-		
-		public void findNewLocation()
+		public void findNewLocation(final String newLocationInput)
 		{
 			UiApplication.getUiApplication().invokeLater(new Runnable() {
 				public void run() {
@@ -449,7 +426,7 @@ public class NwsClient extends UiApplication
 			});
 			LocationData newLoc = null;
 			try {
-				newLoc = getLocationData(newLocationInput_);
+				newLoc = getLocationData(newLocationInput);
 				if (newLoc.getCountry().equals("US")) {
 					// Get the ICAO name of the weather station...
 					findNearestWeatherStation(newLoc);
@@ -500,7 +477,6 @@ public class NwsClient extends UiApplication
 				options.setCurrentLocation(newLoc);
 				store.setContents(options);
 				store.commit();
-				location_ = newLoc;
 			}
 		}
 		
@@ -508,36 +484,36 @@ public class NwsClient extends UiApplication
 		{
 			for(;;) {
 								
-				if (newLocationInput_ != null) {
-					findNewLocation();
-					newLocationInput_ = null;
+				String newLocationInput = getNewLocation();
+				if (newLocationInput != null) {
+					findNewLocation(newLocationInput);
+					setNewLocation(null); // clear this out
 				}
 				
-				// check for interrupt
-				try {
-					Thread.sleep(1); // sleep for a millisecond...
-				} catch (InterruptedException e) {
-					System.err.println(e.toString());
-					return;
-				}
+				LocationData location_ = options.getCurrentLocation();
 				
-				if (location_ == null)
-					return;
+				if (location_ == null) {
+					// wait for valid location input
+					try {
+						Thread.sleep(1000);
+					} catch (InterruptedException e) {
+						continue;
+					}
+				}
 				
 				if (RadioInfo.isDataServiceOperational()) {
 					getDisplayWeather(location_);
 					try {
-						Thread.sleep(1800000); // sleep for 30 minutes
+						Thread.sleep(UPDATE_INTERVAL);
 					} catch (InterruptedException e) {
-						System.err.println(e.toString());
-						return;
+						continue;
 					}
 				} else {
+					// wait for radio service
 					try {
 						Thread.sleep(4000); // sleep for 4 seconds
 					} catch (InterruptedException e) {
-						System.err.println(e.toString());
-						return;
+						continue;
 					}
 				}
 			}
@@ -617,6 +593,26 @@ public class NwsClient extends UiApplication
 		HomeScreen.updateIcon(bg, 1);
 	}
 	
+	/* Class methods */
+	
+	public String getNewLocation()
+	{
+		// Return a copy of the string
+		synchronized(this) {
+			if (newLocation_ == null)
+				return null;
+			return new String(newLocation_);
+		}
+	}
+	
+	
+	public void setNewLocation(String newLocation)
+	{
+		synchronized(this) {
+			newLocation_ = newLocation;
+		}
+	}
+	
 	/**
 	 * For any location--US or international--fetch the necessary url, parse the  
 	 * returned XML, and return a hashtable of current_conditions.
@@ -676,13 +672,8 @@ public class NwsClient extends UiApplication
 				} else {
 					keepGoing = false;
 					// Start the icon updater thread
-					IconUpdaterThread iup = new IconUpdaterThread();
-					workerThread_ = iup;
-					if (options.getCurrentLocation() != null) {
-						options.getCurrentLocation().setLastUpdated(0);
-						iup.setLocation(options.getCurrentLocation());
-					}
-					iup.start();
+					workerThread_ = new Thread(new IconUpdaterThread());
+					workerThread_.start();
 				}
 			}
 		} else {
@@ -698,7 +689,7 @@ public class NwsClient extends UiApplication
 			
 			// if no location go to the options screen
 			if (options.getCurrentLocation() != null) {
-				workerThread_ = new Thread(new WorkerThread(options.getCurrentLocation()));
+				workerThread_ = new Thread(new WorkerThread());
 				workerThread_.start();
 			} else {
 				viewOptions();
@@ -728,25 +719,9 @@ public class NwsClient extends UiApplication
 		return true;
 	}
 	
-	private void killWorker()
-	{
-		// Kill the worker thread and start a new one
-		if (this.workerThread_ != null && this.workerThread_.isAlive()) {
-			this.workerThread_.interrupt();
-			try {
-				this.workerThread_.join();
-			} catch (InterruptedException e) {
-				// ...
-			}
-		}
-		this.workerThread_ = null;
-	}
-	
 	private void refreshWeather()
 	{
-		killWorker();
-		this.workerThread_ = new Thread(new WorkerThread(options.getCurrentLocation()));
-		this.workerThread_.start();
+		this.workerThread_.interrupt();
 	}
 	
 	// menu items
@@ -774,6 +749,7 @@ public class NwsClient extends UiApplication
 					if (optionsScreen_.isDisplayed())
 						optionsScreen_.storeInterfaceValues();
 					setNewLocation(newLocField_.getText());
+					refreshWeather();
 				}
 			} else {
 				Dialog.alert("Enter a valid city, State");
@@ -836,13 +812,6 @@ public class NwsClient extends UiApplication
 			if (conn != null)
 				conn.close();
 		}
-	}
-	
-	private void setNewLocation(final String userAddress)
-	{
-		killWorker();
-		this.workerThread_ = new Thread(new WorkerThread(userAddress, options.getCurrentLocation())); // old location, in case of failure);
-		this.workerThread_.start();
 	}
 	
 	private Calendar parseTime(String timeStr)
