@@ -124,14 +124,51 @@ public class NwsClient extends UiApplication
 	private final class NwsClientScreen extends MainScreen
 	{
 		
-		public LabelField locationLabel;
+		public LabelStatusField _titleField;
 		
 		/**
 		 * Construct an NWS client screen.
 		 */
 		public NwsClientScreen()
 		{
-			setTitle(new LabelField("NWSClient", LabelField.USE_ALL_WIDTH));
+			setTitle(new LabelStatusField("NWSClient", LabelField.USE_ALL_WIDTH, ""));
+		}
+		
+		public void setTitle(LabelStatusField title)
+		{
+			super.setTitle(title);
+			_titleField = title;
+		}
+		
+		public String getTitleText()
+		{
+			return _titleField.getText();
+		}
+		
+		public void setTitleText(String title)
+		{
+			_titleField.setText(title);
+		}
+		
+		public void setStatusText(String status)
+		{
+			_titleField.setStatus(status);
+		}
+		
+		public void setStatusVisible(boolean visible)
+		{
+			// Show/hide the status indicator
+			_titleField.setStatusVisible(visible);
+		}
+		
+		public boolean getStatusVisible()
+		{
+			return _titleField.getStatusVisible();
+		}
+		
+		public String getStatusText()
+		{
+			return _titleField.getStatus();
 		}
 		
 		protected void makeMenu(Menu menu, int instance)
@@ -420,8 +457,8 @@ public class NwsClient extends UiApplication
 		{
 			UiApplication.getUiApplication().invokeLater(new Runnable() {
 				public void run() {
-					final MessageScreen msgScreen = new MessageScreen("Getting location...");
-					pushScreen(msgScreen);
+					mainScreen_.setStatusText("Getting Location...");
+					mainScreen_.setStatusVisible(true);
 				}
 			});
 			LocationData newLoc = null;
@@ -436,7 +473,7 @@ public class NwsClient extends UiApplication
 				invokeLater(new Runnable() {
 					public void run() {
 						// Remove the getting location message...
-						UiApplication.getUiApplication().popScreen(UiApplication.getUiApplication().getActiveScreen());
+						mainScreen_.setStatusVisible(false);
 						Dialog.alert("Choose a more specific address");
 					}
 				});
@@ -444,7 +481,7 @@ public class NwsClient extends UiApplication
 				// Couldn't find it at all...
 				invokeLater(new Runnable() {
 					public void run() {
-						UiApplication.getUiApplication().popScreen(UiApplication.getUiApplication().getActiveScreen());
+						mainScreen_.setStatusVisible(false);
 						Dialog.alert("Could not find location");
 					}
 				});
@@ -453,7 +490,7 @@ public class NwsClient extends UiApplication
 				UiApplication.getUiApplication().invokeLater(new Runnable() {
 					public void run() {
 						// Remove the getting location message...
-						UiApplication.getUiApplication().popScreen(UiApplication.getUiApplication().getActiveScreen());
+						mainScreen_.setStatusVisible(false);
 						Dialog.alert("Error getting location: "+msg);
 					}
 				});
@@ -463,8 +500,7 @@ public class NwsClient extends UiApplication
 				
 				UiApplication.getUiApplication().invokeLater(new Runnable() {
 					public void run() {
-						// Remove the getting location message...
-						UiApplication.getUiApplication().popScreen(UiApplication.getUiApplication().getActiveScreen());
+						mainScreen_.setStatusVisible(false);
 					}
 				});
 				
@@ -495,7 +531,8 @@ public class NwsClient extends UiApplication
 				if (location_ == null) {
 					// wait for valid location input
 					try {
-						Thread.sleep(1000);
+						Thread.sleep(UPDATE_INTERVAL);
+						continue;
 					} catch (InterruptedException e) {
 						continue;
 					}
@@ -520,6 +557,17 @@ public class NwsClient extends UiApplication
 		}
 		
 	}
+	
+	/*class OnDemandThread implements Runnable
+	{
+		public boolean busy;
+		
+		public void run()
+		{
+			
+		}
+		
+	}*/
 	
 	// STATIC METHODS
 	
@@ -687,11 +735,11 @@ public class NwsClient extends UiApplication
 			// Don't need to start the bitmpaProvider--it will start on demand
 			this.bitmapProvider_ = new BitmapProvider();
 			
+			workerThread_ = new Thread(new WorkerThread());
+			workerThread_.start();
+			
 			// if no location go to the options screen
-			if (options.getCurrentLocation() != null) {
-				workerThread_ = new Thread(new WorkerThread());
-				workerThread_.start();
-			} else {
+			if (options.getCurrentLocation() == null) {
 				viewOptions();
 			}
 		}
@@ -775,6 +823,10 @@ public class NwsClient extends UiApplication
 		loc.setIcao(weatherStation.getName());
 		loc.setIcaoLat(weatherStation.getLat()); // latitude in radians
 		loc.setIcaoLon(weatherStation.getLon()); // longitude in radians
+		
+		RadarStation radarStation = (RadarStation)RadarStation.findNearest(loc.getLat(), loc.getLon());
+		loc.setRadar(radarStation.getName());
+		
 		return true;
 	}
 		
@@ -1233,7 +1285,7 @@ public class NwsClient extends UiApplication
 		Font tinyFont = smallFont.derive(Font.PLAIN, 11);
 
 		// Make the title label
-		mainScreen_.setTitle(new LabelField(address, LabelField.ELLIPSIS));
+		mainScreen_.setTitle(new LabelStatusField(address, LabelField.ELLIPSIS, "status..."));
 		
 		VerticalFieldManager main = new VerticalFieldManager(Manager.USE_ALL_WIDTH);
 		mainScreen_.add(main);
@@ -1800,6 +1852,13 @@ public class NwsClient extends UiApplication
 	 */
 	private void getDisplayNWSForecast(final LocationData location)
 	{
+		UiApplication.getUiApplication().invokeLater(new Runnable() {
+			public void run()
+			{
+				mainScreen_.setStatusText("Getting Forecast...");
+				mainScreen_.setStatusVisible(true);
+			}
+		});
 		// The forecast observations we're interested in...
 		final String[] observations = { 
 			"weather", 
@@ -1828,6 +1887,7 @@ public class NwsClient extends UiApplication
 					displayForecast(location, flattened, 
 					"The National Oceanic and Atmospheric Administration"
 					);
+					mainScreen_.setStatusVisible(false);
 				}
 			});
 		} catch (Exception e) {
@@ -1907,11 +1967,10 @@ public class NwsClient extends UiApplication
 		// Indicate update is happening
 		location.setLastUpdated(System.currentTimeMillis());
 		
-		final MessageScreen wait = new MessageScreen(
-						resources_.getString(nwsclientResource.GETTING_WEATHER));
 		invokeLater(new Runnable() {
 			public void run() {
-				pushScreen(wait);
+				mainScreen_.setStatusText(resources_.getString(nwsclientResource.GETTING_WEATHER));
+				mainScreen_.setStatusVisible(true);
 			}
 		});
 		
@@ -1933,12 +1992,6 @@ public class NwsClient extends UiApplication
 			getDisplayGoogleWeather(location);
 		}
 		
-		// Lift up the wait screen
-		invokeLater(new Runnable() {
-			public void run() {
-				popScreen(wait);
-			}
-		});
 	}
 	
 	private void displayLicense()

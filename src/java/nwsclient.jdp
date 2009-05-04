@@ -25,10 +25,9 @@ BitmapProvider.java
 data\weather_stations.data
 HttpHelper.java
 img\icon.png
-img\website_blue.png
+LabelStatusField.java
 LinkField.java
 LocationData.java
-MessageScreen.java
 NotFoundException.java
 NwsClient.java
 nwsclient.rrc
@@ -36,6 +35,7 @@ nwsclient.rrh
 nwsclient_en.rrc
 NwsClientOptions.java
 ParseError.java
+RadarStation.java
 WeatherStation.java
 XmlHelper.java
 ]

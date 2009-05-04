@@ -33,7 +33,9 @@ public class WeatherStation extends Object
 	private static final double nauticalMilePerLongitude = 3443.9307042677865;
 	private static final double milesPerNauticalMile = 1.15078;
 	
-	private static String _weatherStationFilePath = "/data/weather_stations.data";
+	private static String _dataFilePath = "/data/weather_stations.data";
+	
+	private static int _nameLength = 4; // i.e. KOAK, KSYR, etc...
 	
 	public String name;
 	public double lat_;
@@ -118,7 +120,7 @@ public class WeatherStation extends Object
 	{
 		// create a temp weather station to get the getResourceAsStream class method
 		WeatherStation tmp = new WeatherStation();
-		InputStream is = tmp.getClass().getResourceAsStream( _weatherStationFilePath );
+		InputStream is = tmp.getClass().getResourceAsStream( _dataFilePath );
 		return is;
 	}
 	
@@ -153,7 +155,7 @@ public class WeatherStation extends Object
 		// goUp codes: n > 0, n < 64 = left child, n levels up 
 		//             n > 64  = right child, n-64 levels up
 		
-		byte[] buff = new byte[4]; // weather station name
+		byte[] buff = new byte[_nameLength]; // weather station name
 		int bytes = din.read(buff);
 		if (bytes == -1)
 			return null;
@@ -162,7 +164,7 @@ public class WeatherStation extends Object
 		sta.lat_ = din.readDouble();
 		sta.lon_ = din.readDouble();
 		
-		byte[] buff2 = new byte[1]; // weather station name
+		byte[] buff2 = new byte[1]; // goUp code
 		bytes = din.read(buff2);
 		if (bytes == -1)
 			return sta; // we're done

@@ -63,6 +63,9 @@ public class LocationData implements Persistable
 	// Nearest weather station id
 	private String _icao;
 	
+	// Nearest radar id
+	private String _radar;
+	
 	private double _icaoLat;
 	
 	private double _icaoLon;
@@ -131,6 +134,11 @@ public class LocationData implements Persistable
 		return _icaoLon;
 	}
 	
+	public String getRadar()
+	{
+		return _radar;
+	}
+	
 	public long getLastUpdated()
 	{
 		return lastUpdated_;
@@ -179,6 +187,11 @@ public class LocationData implements Persistable
 	public void setIcaoLon(double lon)
 	{
 		_icaoLon = lon;
+	}
+	
+	public void setRadar(String radar)
+	{
+		_radar = radar;
 	}
 	
 	public void setLastUpdated(long time)
