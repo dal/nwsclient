@@ -110,13 +110,6 @@ public class BitmapProvider extends Thread
 	private void fetchBitmap(final String url, final BitmapField field)
 	{
 		
-		try {
-			
-		} catch (Exception e) {
-			System.err.println("Error fetching bitmap: "+e.getMessage());
-			return;
-		}
-		
 		byte[] buff;
 		int len = 0;
 		HttpHelper.Connection conn = null;

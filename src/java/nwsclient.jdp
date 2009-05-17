@@ -20,8 +20,11 @@ AutoRestart=0
 Description=Retrieve current weather and forecast information from NOAA.
 ExcludeFromBuildAll=0
 [Files
+AbstractScreen.java
 AmbiguousLocationException.java
 BitmapProvider.java
+BitmapScrollField.java
+data\radar_stations.data
 data\weather_stations.data
 HttpHelper.java
 img\icon.png
@@ -35,7 +38,9 @@ nwsclient.rrh
 nwsclient_en.rrc
 NwsClientOptions.java
 ParseError.java
+RadarScreen.java
 RadarStation.java
+Station.java
 WeatherStation.java
 XmlHelper.java
 ]
