@@ -81,7 +81,7 @@ public class NwsClient extends UiApplication
 	
 	private RadarScreen _radarScreen;
 	
-	private EditField newLocField_;
+	private EditField _newLocField;
 	
 	private static ResourceBundle resources_ = ResourceBundle.getBundle(nwsclientResource.BUNDLE_ID, nwsclientResource.BUNDLE_NAME);
 	
@@ -148,7 +148,7 @@ public class NwsClient extends UiApplication
 	 * The OptionsScreen allows the user to change their location and set some 
 	 * other NwsClient preferences.
 	 */
-	private class OptionsScreen extends AbstractScreen
+	private class OptionsScreen extends MainScreen
 	{
 		private ObjectChoiceField _recentLocationsChoiceField;
 		private CheckboxField _useNwsCheckBox;
@@ -158,10 +158,23 @@ public class NwsClient extends UiApplication
 		final class recentLocListener implements FieldChangeListener {
 			public void fieldChanged(Field field, int context) {
 				try {
+					
+					if (context == FieldChangeListener.PROGRAMMATIC)
+						return;
+					
 					ObjectChoiceField ocf = (ObjectChoiceField) field;
 					int idx = ocf.getSelectedIndex();
 					Vector locations = options.getLocations();
 					if (idx < locations.size()) {
+						
+						if (_workerBusy) {
+							// warn if we're already fetching weather
+							synchronized(UiApplication.getEventLock()) {
+								Dialog.alert(resources_.getString(nwsclientResource.BUSY));
+							}
+							return;
+						}
+						
 						final LocationData newLoc = (LocationData)locations.elementAt(idx);
 						options.setCurrentLocation(newLoc);
 						_optionsScreen.storeInterfaceValues();
@@ -176,7 +189,7 @@ public class NwsClient extends UiApplication
 						}
 					}
 				} catch (ClassCastException ce) {
-					// ...
+					// This is not a choice "commit" operation
 				}
 			}
 		};
@@ -186,15 +199,14 @@ public class NwsClient extends UiApplication
 		 */
 		public OptionsScreen()
 		{
-			super("NWSClient "+resources_.getString(nwsclientResource.OPTIONS), "");
-			newLocField_ = new EditField((resources_.getString(nwsclientResource.LOCATION)+": "), 
+			//super("NWSClient "+resources_.getString(nwsclientResource.OPTIONS), "");
+			super();
+			_newLocField = new EditField((resources_.getString(nwsclientResource.LOCATION)+": "), 
 							null, Integer.MAX_VALUE, EditField.FILTER_DEFAULT);
-			add(newLocField_);
+			add(_newLocField);
 			
-			//_recentLocationsLabel = new LabelField("Recent Locations:", LabelField.ELLIPSIS);
 			_recentLocationsChoiceField = new ObjectChoiceField();
 			_recentLocationsChoiceField.setLabel(resources_.getString(nwsclientResource.RECENT_LOCATIONS)+":");
-			setRecentLocationsChoiceField();
 			_recentLocationsChoiceField.setChangeListener(new recentLocListener());
 			add(_recentLocationsChoiceField);
 			
@@ -233,14 +245,13 @@ public class NwsClient extends UiApplication
 		protected boolean keyChar(char key, int status, int time)
 		{
 			// UiApplication.getUiApplication().getActiveScreen().
-			if ( getLeafFieldWithFocus() == newLocField_ && key == Characters.ENTER ) {
+			if (getLeafFieldWithFocus() == _newLocField && key == Characters.ENTER) {
 				storeInterfaceValues();
 				_newLocationMenuItem.run();
 				return true; //I've absorbed this event, so return true
-			} /*else {
+			} else {
 				return super.keyChar(key, status, time);
-			}*/
-			return false;
+			}
 		}
 		
 		protected void setRecentLocationsChoiceField()
@@ -283,8 +294,24 @@ public class NwsClient extends UiApplication
 			return changed;
 		}
 		
+		public void setInterfaceValues()
+		{
+			setRecentLocationsChoiceField();
+			_useNwsCheckBox.setChecked(options.useNws());
+			_metricCheckBox.setChecked(options.metric());
+			_autoUpdateIconCheckBox.setChecked(options.autoUpdateIcon());
+			_newLocField.setText("");
+		}
+		
 		public void save()
 		{
+			if (_workerBusy) {
+				synchronized(UiApplication.getEventLock()) {
+					Dialog.alert(resources_.getString(nwsclientResource.BUSY));
+				}
+				return;
+			}
+			
 			if (storeInterfaceValues()) {
 				store.setContents(options);
 				store.commit();
@@ -305,6 +332,7 @@ public class NwsClient extends UiApplication
 	{
 		
 		private LocationData location_;
+		private boolean _firstInit = true;
 		
 		IconUpdaterThread()
 		{
@@ -359,7 +387,7 @@ public class NwsClient extends UiApplication
 					}
 					
 					if (location_ == null) {
-						Thread.sleep(10000);
+						Thread.sleep(10000); // wait 10 seconds for incoming location
 						continue;
 					}
 					
@@ -368,7 +396,8 @@ public class NwsClient extends UiApplication
 					long thisInterval = now - location_.getLastUpdated();
 					
 					getOptionsFromStore();
-					if (thisInterval >= UPDATE_INTERVAL) {
+					if (thisInterval >= UPDATE_INTERVAL || _firstInit) {
+						_firstInit = false;
 						doUpdateIcon();
 						location_.setLastUpdated(now);
 					} else {
@@ -738,7 +767,7 @@ public class NwsClient extends UiApplication
 	private MenuItem _newLocationMenuItem = new MenuItem(resources_.getString(nwsclientResource.GET_FORECAST), 100, 10) {
 		public void run()
 		{
-			if (newLocField_.getText().length() > 0) {
+			if (_newLocField.getText().length() > 0) {
 				if (_workerBusy) {
 					synchronized(UiApplication.getEventLock()) {
 						Dialog.alert(resources_.getString(nwsclientResource.BUSY));
@@ -747,9 +776,11 @@ public class NwsClient extends UiApplication
 				}
 				
 				if (checkDataConnectionAndWarn()) {
-					if (_optionsScreen.isDisplayed())
+					if (_optionsScreen.isDisplayed()) {
 						_optionsScreen.storeInterfaceValues();
-					setNewLocation(newLocField_.getText());
+						_optionsScreen.close();
+					}
+					setNewLocation(_newLocField.getText());
 					refreshWeather();
 				}
 			} else {
@@ -768,6 +799,7 @@ public class NwsClient extends UiApplication
 	 */
 	public void viewOptions() 
 	{
+		_optionsScreen.setInterfaceValues();
 		pushScreen(_optionsScreen);
 	}
 	
@@ -1966,8 +1998,8 @@ public class NwsClient extends UiApplication
 			return;
 		}
 		if (_location.getCountry().equals("US") && options.useNws()) {
+			_radarScreen.showRadar(_location);
 			synchronized (UiApplication.getEventLock()) {
-				_radarScreen.showRadar(_location);
 				if (_radarScreen.isVisible()) {
 					return;
 				} else {
