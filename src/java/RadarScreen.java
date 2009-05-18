@@ -23,6 +23,7 @@ import net.rim.device.api.system.Bitmap;
 import net.rim.device.api.system.RadioInfo;
 import net.rim.device.api.ui.Field;
 import net.rim.device.api.ui.component.Dialog;
+import net.rim.device.api.ui.component.LabelField;
 //import net.rim.device.api.ui.component.NullField;
 import net.rim.device.api.ui.UiApplication;
 import java.io.IOException;
@@ -81,19 +82,33 @@ public class RadarScreen extends AbstractScreen
 		
 		public void getDisplayRadar(final String station)
 		{
-			String radarUrl = NWS_URL + "/RadarImg/N0R/"+station+"_N0R_0.gif";
+			final String radarUrl = NWS_URL + "/RadarImg/N0R/"+station+"_N0R_0.gif";
 			Bitmap radarBm = fetchBitmap(radarUrl);
+			if (radarBm == null) {
+				UiApplication.getUiApplication().invokeLater(new Runnable() {
+					public void run()
+					{
+						setStatusVisible(false);
+						add(new LabelField("Error getting radar data from "+radarUrl));
+					}
+				} );
+				return;
+			}
 			int width = radarBm.getWidth();
 			int height = radarBm.getHeight();
 			final Bitmap compositeBm = new Bitmap(radarBm.getWidth(), radarBm.getHeight());
 			Graphics g = new Graphics(compositeBm);
 			g.drawBitmap(0, 0, width, height, _background, 0, 0);
 			g.drawBitmap(0, 0, width, height, radarBm, 0, 0);
-			//g.drawBitmap(0, 0, width, height, _overlay, 0, 0);
+			//int globalAlpha = g.getGlobalAlpha();
+			//g.setGlobalAlpha(125);
+			g.drawBitmap(0, 0, width, height, _overlay, 0, 0);
+			//g.setGlobalAlpha(globalAlpha);
 			if (radarBm != null) {
 				UiApplication.getUiApplication().invokeLater(new Runnable() {
 					public void run()
 					{
+						setStatusVisible(false);
 						setTitleText(station+" radar");
 						//NullField nullField1 = new NullField(Field.FIELD_LEFT);
 						//add(nullField1);
@@ -126,7 +141,14 @@ public class RadarScreen extends AbstractScreen
 			}
 			
 			// Layer all the overlays into one bitmap image
-			_overlay = new Bitmap(_background.getWidth(), _background.getHeight());
+			int width = _background.getWidth();
+			int height = _background.getHeight();
+			_overlay = new Bitmap(width, height);
+			_overlay.createAlpha(Bitmap.ALPHA_BITDEPTH_8BPP);
+			int [] data = new int[width * height];
+			for(int i=0; i < data.length; i++)
+				data[i] = 0x00000000; // no alpha
+			_overlay.setARGB(data, 0, width, 0, 0, width, height);
 			Graphics g = new Graphics(_overlay);
 			Bitmap countiesBm = fetchBitmap(countiesUrl);
 			if (countiesBm != null)
@@ -145,6 +167,14 @@ public class RadarScreen extends AbstractScreen
 			while(true) {
 				LocationData newLoc = getNewLocation();
 				if (newLoc != null && newLoc != _loc) {
+					UiApplication.getUiApplication().invokeLater(new Runnable() {
+						public void run()
+						{
+							setStatusText("Getting imagery. . .");
+							setStatusVisible(true);
+						}
+					} );
+					System.err.println("New location: "+newLoc.getIcao()); // debug debug
 					_workerBusy = true;
 					_loc = newLoc;
 					setNewLocation(null);
@@ -153,7 +183,11 @@ public class RadarScreen extends AbstractScreen
 					if (_radarStation != rdr.getName()) {
 						_radarStation = rdr.getName();
 						getOverlayImages(_radarStation);
+					} else {
+						System.err.println("Radar station is the same");
 					}
+				} else {
+					System.err.println("No new location"); // debug debug 
 				}
 				
 				if (_radarStation != null) {
