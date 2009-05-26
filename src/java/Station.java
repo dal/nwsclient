@@ -20,8 +20,6 @@ public abstract class Station
 	public Station left;
 	public Station right;
 	
-	private static Station _root = null;
-	
 	public static double projectLat(double lat)
 	{
 		return MathUtilities.log(Math.tan(lat) + (1.0/Math.cos(lat)));

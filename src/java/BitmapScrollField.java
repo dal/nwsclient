@@ -48,7 +48,7 @@ public class BitmapScrollField extends Field
 	
 	public int getPreferredWidth()
 	{
-		int width = _bitmap.getWidth(); 
+		int width = _bitmap.getWidth();
 		int displayWidth = Display.getWidth();
 		return Math.min(width, displayWidth);
 	}
