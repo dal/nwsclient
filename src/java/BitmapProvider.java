@@ -21,14 +21,17 @@ import java.util.*;
 import java.io.*;
 import net.rim.device.api.ui.component.*;
 import net.rim.device.api.system.*;
+import net.rim.blackberry.api.homescreen.HomeScreen;
 
 public class BitmapProvider extends Thread
 {
-
-	private Hashtable bitmapStore;
+	
+	private static int[] iconSize = { 48, 36 };
+	
 	private Vector urls;
 	private Vector fields;
 	private Hashtable bitmaps;
+	private Vector homeScreen;
 	
 	private boolean _stop = false;
 
@@ -37,6 +40,7 @@ public class BitmapProvider extends Thread
 		urls = new Vector();
 		fields = new Vector();
 		bitmaps = new Hashtable();
+		homeScreen = new Vector();
 	}
 	
 	public synchronized void stop()
@@ -44,10 +48,12 @@ public class BitmapProvider extends Thread
 		_stop = true;
 	}
 	
-	public synchronized void getBitmap(final String url, final BitmapField field)
+	public synchronized void getBitmap(final String url, final BitmapField field, 
+													boolean doHomeScreen)
 	{
 		urls.addElement(url);
 		fields.addElement(field);
+		homeScreen.addElement(new Boolean(doHomeScreen));
 		
 		if (!this.isAlive())
 			this.start();
@@ -61,6 +67,7 @@ public class BitmapProvider extends Thread
 			String myUrl = null;
 			BitmapField myField = null;
 			boolean haveIt = false;
+			boolean doHomeScreen = false;
 			
 			// We don't want to miss any urls coming in...
 			synchronized(this) {
@@ -70,11 +77,14 @@ public class BitmapProvider extends Thread
 				}
 				urlCount = urls.size();
 				if (urlCount > 0) {
-				// go get some bitmaps
+					// go get some bitmaps
 					myUrl = (String)urls.firstElement();
 					myField = (BitmapField)fields.firstElement();
+					Boolean tmpBool = (Boolean)homeScreen.firstElement();
+					doHomeScreen = tmpBool.booleanValue();
 					urls.removeElementAt(0);
 					fields.removeElementAt(0);
+					homeScreen.removeElementAt(0);
 					haveIt = bitmaps.containsKey(myUrl);
 				}
 			}
@@ -82,9 +92,17 @@ public class BitmapProvider extends Thread
 			// urlCount will be > 0 if we have anything to fetch...
 			if (urlCount > 0 && myField != null && myUrl != null) {
 				if (haveIt) {
-					setBitmapField(myField, (Bitmap)bitmaps.get(myUrl));
+					EncodedImage img = (EncodedImage)bitmaps.get(myUrl);
+					setBitmapField(myField, img);
+					if (doHomeScreen)
+						setRolloverIcon(img);
 				} else {
-					fetchBitmap(myUrl, myField);
+					EncodedImage img = fetchBitmap(myUrl);
+					if (img != null) {
+						setBitmapField(myField, img);
+						if (doHomeScreen)
+							setRolloverIcon(img);
+					}
 				}
 			} else {
 				// Wait a second
@@ -97,19 +115,39 @@ public class BitmapProvider extends Thread
 		}
 	}
 	
-	private void setBitmapField(final BitmapField field, final Bitmap bm)
+	public void setRolloverIcon(final EncodedImage img)
+	{
+		int w = img.getWidth();
+		int h = img.getHeight();
+		int scale = 10000;
+		
+		if (w > iconSize[0]) {
+			double sc = (double)iconSize[0] / w;
+			scale = (int)(sc * 10000.);
+		}
+		
+		if (h > iconSize[1]) {
+			double sc = (double)iconSize[1] / h;
+			scale = Math.max(scale, (int)(sc * 10000.));
+		}
+		
+		EncodedImage copy = img.scaleImage32(scale, scale);
+		
+		HomeScreen.setRolloverIcon(copy.getBitmap(), 1);
+	}
+	
+	private void setBitmapField(final BitmapField field, final EncodedImage img)
 	{
 		// Set the bitmapField's bitmap
 		UiApplication.getApplication().invokeLater(new Runnable() {
 			public void run() {
-				field.setBitmap(bm);
+				field.setBitmap(img.getBitmap());
 			}
 		});
 	}
 	
-	private void fetchBitmap(final String url, final BitmapField field)
+	public EncodedImage fetchBitmap(final String url)
 	{
-		
 		byte[] buff;
 		int len = 0;
 		HttpHelper.Connection conn = null;
@@ -119,7 +157,7 @@ public class BitmapProvider extends Thread
 			len = conn.is.read(buff, 0, 100000);
 		} catch (IOException e) {
 			System.err.println("Error reading bitmap buffer: "+e.toString());
-			return;
+			return null;
 		} finally {
 			if (conn != null)
 				conn.close();
@@ -127,22 +165,22 @@ public class BitmapProvider extends Thread
 		
 		if (len == 0) {
 			System.err.println("BitmapProvider: Got 0 bytes of data, bailing out");
-			return;
+			return null;
 		}
 		
-		final Bitmap bm;
+		final EncodedImage img;
 		try {
-			bm = Bitmap.createBitmapFromBytes(buff, 0, -1, 1);
+			//bm = Bitmap.createBitmapFromBytes(buff, 0, -1, 1);
+			img = EncodedImage.createEncodedImage(buff, 0, len);
 		} catch (Exception e) {
 			System.err.println("Error decoding bitmap"+url+": "+e.toString());
-			return;
+			return null;
 		}
 		
 		synchronized(this) {
-			bitmaps.put(url, bm);
+			bitmaps.put(url, img);
 		}
-		//System.err.println("Got "+url);
-		setBitmapField(field, bm);
+		return img;
 	}
 
 }

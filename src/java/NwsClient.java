@@ -28,6 +28,8 @@ import net.rim.device.api.ui.component.ChoiceField.*;
 import net.rim.blackberry.api.homescreen.*; // for updating the application icon
 import net.rim.device.api.i18n.SimpleDateFormat.*;
 import net.rim.device.api.system.ApplicationDescriptor.*;
+import net.rim.blackberry.api.browser.Browser;
+import net.rim.blackberry.api.browser.BrowserSession;
 import javax.microedition.global.*;
 import javax.microedition.io.*;
 import java.util.*;
@@ -73,7 +75,7 @@ public class NwsClient extends UiApplication
 	
 	private LocationData currentLocation_;
 	
-	private BitmapProvider bitmapProvider_;
+	private BitmapProvider _bitmapProvider;
 	
 	private NwsClientScreen _mainScreen;
 	
@@ -116,10 +118,10 @@ public class NwsClient extends UiApplication
 	 */
 	private static class Observation
 	{
-		public String type;
 		public TimeKey time;
 		public String value;
 		public String units;
+		public String url;
 	};
 	
 	/**
@@ -135,7 +137,6 @@ public class NwsClient extends UiApplication
 		
 		protected void makeMenu(Menu menu, int instance)
 		{
-			menu.add(_radarMenuItem);
 			menu.add(optionsMenuItem_);
 			menu.add(refreshMenuItem_);
 			menu.addSeparator();
@@ -348,7 +349,15 @@ public class NwsClient extends UiApplication
 				boolean alert = (alerts.size() > 0);
 				if (conditions != null && conditions.containsKey("temperature")) {
 					String temp = (String)conditions.get("temperature");
-					updateIcon(temp, alert, 1);
+					
+					updateIcon(temp, alert);
+					
+					String rolloverIconUrl = (String)conditions.get("icon_url");
+					
+					// get the rollover icon
+					final EncodedImage img = _bitmapProvider.fetchBitmap(rolloverIconUrl);
+					_bitmapProvider.setRolloverIcon(img);
+					
 				} else {
 					System.err.println("Error getting icon current conditions: null current conditions");
 				}
@@ -423,7 +432,7 @@ public class NwsClient extends UiApplication
 		{
 			UiApplication.getUiApplication().invokeLater(new Runnable() {
 				public void run() {
-					_mainScreen.setStatusText("Getting Location...");
+					_mainScreen.setStatusText(resources_.getString(nwsclientResource.GETTING_LOCATION));
 					_mainScreen.setStatusVisible(true);
 				}
 			});
@@ -569,7 +578,7 @@ public class NwsClient extends UiApplication
 		}
 	}
 	
-	public static synchronized void updateIcon(String temp, boolean alert, int whichApp)
+	public static synchronized void updateIcon(String temp, boolean alert)
 	{
 		int lOffset = 22; // left offset, two chars long
 		if (temp.length() == 1) {
@@ -659,89 +668,8 @@ public class NwsClient extends UiApplication
 		return parsed;
 	}
 	
-	// CLASS METHODS
-	
-	// constructor
-	public NwsClient(boolean autostart)
-	{	
-		if (autostart) {
-			_foreground = false;
-			// Alternate entry point
-			ApplicationManager myApp = ApplicationManager.getApplicationManager();
-			boolean keepGoing = true;
-			while(keepGoing) {
-				if (myApp.inStartup()) {
-					//The BlackBerry is still starting up, sleep for 1 second.
-					try {
-						Thread.sleep(1000);
-					} catch (Exception ex) {
-						System.err.println("Error sleeping entry thread: "+ex.toString());
-					}
-				} else {
-					keepGoing = false;
-					// Start the icon updater thread
-					_workerThread = new Thread(new IconUpdaterThread());
-					_workerThread.start();
-				}
-			}
-		} else {
-			_foreground = true;
-			requestForeground();
-			// started by the user
-			_mainScreen = new NwsClientScreen("NWSClient", "");
-			_optionsScreen = new OptionsScreen();
-			_radarScreen = new RadarScreen();
-			displaySplash(_mainScreen);
-			pushScreen(_mainScreen);
-			
-			// Don't need to start the bitmpaProvider--it will start on demand
-			this.bitmapProvider_ = new BitmapProvider();
-			
-			_workerThread = new Thread(new WorkerThread());
-			_workerThread.start();
-			
-			// if no location go to the options screen
-			if (options.getCurrentLocation() == null) {
-				viewOptions();
-			}
-		}
-	}
-	
-	protected boolean acceptsForeground()
-	{
-		return _foreground;
-	}
-	
-	/**
-	 * Check to make sure we have a data connection. 
-	 * If not, show a warning dialog and return false.
-	 */
-	private boolean checkDataConnectionAndWarn()
-	{
-		if (!RadioInfo.isDataServiceOperational()) {
-			invokeLater(new Runnable() {
-				public void run() {
-					Dialog.alert(resources_.getString(nwsclientResource.NO_DATA));
-				}
-			});
-			return false;
-		}
-		return true;
-	}
-	
-	private void refreshWeather()
-	{
-		this._workerThread.interrupt();
-	}
-	
 	// menu items
 	// cache menu items for reuse
-	private MenuItem _radarMenuItem = new MenuItem("Radar", 110, 10) {
-		public void run()
-		{
-			getDisplayRadar();
-		}
-	};
 	
 	private MenuItem optionsMenuItem_ = new MenuItem(resources_.getString(nwsclientResource.OPTIONS), 110, 10) {
 		public void run()
@@ -793,6 +721,86 @@ public class NwsClient extends UiApplication
 	
 	
 	// Methods
+	
+	// constructor
+	public NwsClient(boolean autostart)
+	{	
+		// Don't need to start the bitmpaProvider--it will start on demand
+		_bitmapProvider = new BitmapProvider();
+		
+		if (autostart) {
+			_foreground = false;
+			// Alternate entry point
+			ApplicationManager myApp = ApplicationManager.getApplicationManager();
+			boolean keepGoing = true;
+			while(keepGoing) {
+				if (myApp.inStartup()) {
+					//The BlackBerry is still starting up, sleep for 1 second.
+					try {
+						Thread.sleep(1000);
+					} catch (Exception ex) {
+						System.err.println("Error sleeping entry thread: "+ex.toString());
+					}
+				} else {
+					keepGoing = false;
+					// Start the icon updater thread
+					_workerThread = new Thread(new IconUpdaterThread());
+					_workerThread.start();
+				}
+			}
+		} else {
+			_foreground = true;
+			requestForeground();
+			// started by the user
+			_mainScreen = new NwsClientScreen("NWSClient", "");
+			_optionsScreen = new OptionsScreen();
+			_radarScreen = new RadarScreen();
+			displaySplash(_mainScreen);
+			pushScreen(_mainScreen);
+			
+			_workerThread = new Thread(new WorkerThread());
+			_workerThread.start();
+			
+			// if no location go to the options screen
+			if (options.getCurrentLocation() == null) {
+				viewOptions();
+			}
+		}
+	}
+	
+	public void getLinkInBrowser(String url)
+	{
+		BrowserSession sess = Browser.getDefaultSession();
+		sess.displayPage(url);
+	}
+	
+	protected boolean acceptsForeground()
+	{
+		return _foreground;
+	}
+	
+	/**
+	 * Check to make sure we have a data connection. 
+	 * If not, show a warning dialog and return false.
+	 */
+	private boolean checkDataConnectionAndWarn()
+	{
+		if (!RadioInfo.isDataServiceOperational()) {
+			invokeLater(new Runnable() {
+				public void run() {
+					Dialog.alert(resources_.getString(nwsclientResource.NO_DATA));
+				}
+			});
+			return false;
+		}
+		return true;
+	}
+	
+	private void refreshWeather()
+	{
+		this._workerThread.interrupt();
+	}
+	
 	
 	/**
 	 * View the various options for this application
@@ -1094,6 +1102,11 @@ public class NwsClient extends UiApplication
 									theObs.value = myHazardEl.getAttribute("phenomena");
 									theObs.units = myHazardEl.getAttribute("significance");
 									myObservations.addElement(theObs);
+									// try to get the url
+									NodeList myUrls = myHazardEl.getElementsByTagName("hazardTextURL");
+									if (myUrls.getLength() > 0) {
+										theObs.url = XmlHelper.getNodeText(myUrls.item(0));
+									}
 								}
 								counter++;
 							} else if (obsChild.getTagName().equals(obsType)) {
@@ -1227,7 +1240,7 @@ public class NwsClient extends UiApplication
 		_mainScreen.deleteAll();
 	}
 	
-	private void displayNWSCurrentConditions(LocationData location, Hashtable weather)
+	private void displayNWSCurrentConditions(final LocationData location, final Hashtable weather)
 	{
 		clearScreen();
 		
@@ -1276,17 +1289,6 @@ public class NwsClient extends UiApplication
 		VerticalFieldManager main = new VerticalFieldManager(Manager.USE_ALL_WIDTH);
 		_mainScreen.add(main);
 		
-		// Test test 
-		LinkField link = new LinkField("Test link!");
-		FieldChangeListener listener = new FieldChangeListener() {
-			public void fieldChanged(Field field, int context) {
-				LinkField linkField = (LinkField) field;
-				Dialog.alert("Link pressed: " + linkField.getLabel());
-			}
-		};
-		link.setChangeListener(listener);
-		main.add(link);
-		
 		// Current Conditions Label
 		LabelField lbl = new LabelField(resources_.getString(nwsclientResource.CURRENT_CONDITIONS_AT)+
 									" "+location.getIcao());
@@ -1311,7 +1313,7 @@ public class NwsClient extends UiApplication
 		topHField.add(currentCondBitmap);
 		
 		if (!condIconUrl.equals("")) {
-			bitmapProvider_.getBitmap(condIconUrl, currentCondBitmap);
+			_bitmapProvider.getBitmap(condIconUrl, currentCondBitmap, true);
 		}
 		
 		VerticalFieldManager topRightCol = new VerticalFieldManager();
@@ -1359,6 +1361,29 @@ public class NwsClient extends UiApplication
 			}
 		}
 		
+		// Forecast discussion link... 
+		LinkField forecastDiscussionLink = new LinkField("Forecast discussion");
+		FieldChangeListener listener = new FieldChangeListener() {
+			public void fieldChanged(Field field, int context) {
+				WfoStation tmp = new WfoStation();
+				WfoStation wfoStation = tmp.findNearest(location.getLat(), location.getLon());
+				String link = wfoStation.getForecastDiscussionLink();
+				System.err.println(link);
+				getLinkInBrowser(link);
+			}
+		};
+		forecastDiscussionLink.setChangeListener(listener);
+		main.add(forecastDiscussionLink);
+		
+		LinkField radarLink = new LinkField("Radar");
+		FieldChangeListener radarListener = new FieldChangeListener() {
+			public void fieldChanged(Field field, int context) {
+				getDisplayRadar();
+			}
+		};
+		radarLink.setChangeListener(radarListener);
+		main.add(radarLink);
+		
 		//btVField.add(btRightCol);
 		main.add(new SeparatorField());
 		
@@ -1372,7 +1397,7 @@ public class NwsClient extends UiApplication
 			_mainScreen.add(new LabelField("Unable to fetch current conditions"));
 			return;
 		} else if (weather.containsKey("temperature")) {
-			updateIcon((String)weather.get("temperature"), false, 0);
+			updateIcon((String)weather.get("temperature"), false);
 		}
 		
 		//String address = (String)weather.get("city");
@@ -1414,7 +1439,7 @@ public class NwsClient extends UiApplication
 		BitmapField currentCondBitmap = new BitmapField();
 		
 		if (!condIconUrl.equals("")) {
-			bitmapProvider_.getBitmap(condIconUrl, currentCondBitmap);
+			_bitmapProvider.getBitmap(condIconUrl, currentCondBitmap, true);
 		}
 		
 		topHField.add(currentCondBitmap);
@@ -1500,7 +1525,7 @@ public class NwsClient extends UiApplication
 			BitmapField forecastBitmap = new BitmapField();
 			
 			if (!iconUrl.equals("")) {
-				bitmapProvider_.getBitmap(iconUrl, forecastBitmap);
+				_bitmapProvider.getBitmap(iconUrl, forecastBitmap, false);
 			}
 			
 			HorizontalFieldManager myHField = new HorizontalFieldManager();
@@ -1547,15 +1572,22 @@ public class NwsClient extends UiApplication
 				if (lastAlert != null) {
 					Date alertDate = lastAlert.time.startTime.getTime();
 					Date endDate = alert.time.startTime.getTime();
+					final String alertUrl = alert.url;
 					String startTimeStr = dateFormat.format(alertDate, new StringBuffer(), null).toString();
 					String endTimeStr = dateFormat.format(endDate, new StringBuffer(), null).toString();
-					RichTextField warningField = new RichTextField(alert.value+" "+alert.units+" "+startTimeStr+" - "+endTimeStr) {
+					LinkField warningField = new LinkField(alert.value+" "+alert.units+" "+startTimeStr+" - "+endTimeStr) {
 						public void paint(Graphics graphics) {
 							// Warning text is red
 							graphics.setColor(0xff0000);
 							super.paint(graphics);
 						}
 					};
+					FieldChangeListener warningListener = new FieldChangeListener() {
+						public void fieldChanged(Field field, int context) {
+							getLinkInBrowser(alertUrl);
+						}
+					};
+					warningField.setChangeListener(warningListener);
 					_mainScreen.add(warningField);
 				} else {
 					Date alertDate = alert.time.startTime.getTime();
@@ -1805,6 +1837,12 @@ public class NwsClient extends UiApplication
 	private boolean getDisplayNWSAlerts(final LocationData location)
 	{
 		boolean alert = false;
+		invokeLater(new Runnable() {
+			public void run() {
+				_mainScreen.setStatusText(resources_.getString(nwsclientResource.GETTING_ALERTS));
+				_mainScreen.setStatusVisible(true);
+			}
+		});
 		try {
 			final Vector alerts = getAlerts(location);
 			alert = (alerts.size() > 0);
@@ -1838,13 +1876,10 @@ public class NwsClient extends UiApplication
 	 */
 	private void getDisplayNWSForecast(final LocationData location)
 	{
-		UiApplication.getUiApplication().invokeLater(new Runnable() {
-			public void run()
-			{
-				_mainScreen.setStatusText("Getting Forecast...");
-				_mainScreen.setStatusVisible(true);
-			}
-		});
+		synchronized (UiApplication.getEventLock()) {
+			_mainScreen.setStatusText(resources_.getString(nwsclientResource.GETTING_FORECAST));
+			_mainScreen.setStatusVisible(true);
+		}
 		// The forecast observations we're interested in...
 		final String[] observations = { 
 			"weather", 
@@ -1968,7 +2003,7 @@ public class NwsClient extends UiApplication
 			// Alerts!
 			boolean alert = getDisplayNWSAlerts(location);
 			
-			updateIcon(temp, alert, 0);
+			updateIcon(temp, alert);
 			
 			// Separate call for the forecast
 			getDisplayNWSForecast(location);

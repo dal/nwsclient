@@ -64,7 +64,7 @@ class LinkField extends Field implements DrawStyle
 	
 	public int getPreferredHeight() 
 	{
-		return _labelHeight;
+		return _labelHeight + 2;
 	}
 	
 	protected void layout(int width, int height) 
@@ -83,10 +83,7 @@ class LinkField extends Field implements DrawStyle
 	{
 		int textX, textY, textWidth;
 		int w = getWidth();
-		textX = 4;
-		textY = 2;
-		textWidth = w - 6;
-		graphics.drawText(_label, textX, textY, (int)( getStyle() & DrawStyle.ELLIPSIS | DrawStyle.HALIGN_MASK ), textWidth );
+		graphics.drawText(_label, 0, 0, (int)( getStyle() & DrawStyle.ELLIPSIS | DrawStyle.HALIGN_MASK ), w);
 	}
 	
 	protected void fieldChangeNotify(int context)  

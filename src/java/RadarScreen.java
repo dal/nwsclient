@@ -100,23 +100,18 @@ public class RadarScreen extends AbstractScreen
 			Graphics g = new Graphics(compositeBm);
 			g.drawBitmap(0, 0, width, height, _background, 0, 0);
 			g.drawBitmap(0, 0, width, height, radarBm, 0, 0);
-			//int globalAlpha = g.getGlobalAlpha();
-			//g.setGlobalAlpha(125);
 			g.drawBitmap(0, 0, width, height, _overlay, 0, 0);
-			//g.setGlobalAlpha(globalAlpha);
 			if (radarBm != null) {
 				UiApplication.getUiApplication().invokeLater(new Runnable() {
 					public void run()
 					{
+						deleteAll();
 						setStatusVisible(false);
 						setTitleText(station+" radar");
-						//NullField nullField1 = new NullField(Field.FIELD_LEFT);
-						//add(nullField1);
 						BitmapScrollField radarField = new BitmapScrollField(compositeBm);
 						add(radarField);
+						radarField.centerView();
 						radarField.setFocus();
-						//NullField nullField2 = new NullField(Field.FIELD_RIGHT);
-						//add(nullField2);
 					}
 				});
 			}

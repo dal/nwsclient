@@ -28,6 +28,19 @@ public class BitmapScrollField extends Field
 		_bitmap = bitmap;
 	}
 	
+	public void centerView()
+	{
+		int w = getWidth();
+		int h = getHeight();
+		int bw = _bitmap.getWidth();
+		int bh = _bitmap.getHeight();
+		if (bw > w) 
+			_xPos = (bw - w) / 2;
+		if (bh > h) 
+			_yPos = (bh - h) / 2;
+		invalidate();
+	}
+	
 	public boolean isFocusable()
 	{
 		return true;

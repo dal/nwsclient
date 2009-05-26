@@ -150,8 +150,8 @@ public abstract class Station
 			}
 		}
 		sta.name = new String(buff);
-		sta.lat_ = din.readDouble();
-		sta.lon_ = din.readDouble();
+		sta.lat_ = (double)din.readFloat();
+		sta.lon_ = (double)din.readFloat();
 		
 		byte[] buff2 = new byte[1]; // goUp code
 		bytes = din.read(buff2);
