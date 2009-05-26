@@ -155,6 +155,11 @@ public class NwsClient extends UiApplication
 		private CheckboxField _useNwsCheckBox;
 		private CheckboxField _autoUpdateIconCheckBox;
 		private CheckboxField _metricCheckBox;
+		private ObjectChoiceField _minFontSizeChoiceField;
+		
+		// For the sake of simplicity I will use array indexes for font size:
+		// index * 2 + 10 = font size
+		private String _fontSizes[] = { "10", "12", "14", "16", "18", "20" };
 		
 		final class recentLocListener implements FieldChangeListener {
 			public void fieldChanged(Field field, int context) {
@@ -229,6 +234,11 @@ public class NwsClient extends UiApplication
 			add(_autoUpdateIconCheckBox);
 			_metricCheckBox = new CheckboxField("Temperature in Celsius", options.metric());
 			add(_metricCheckBox);
+			
+			_minFontSizeChoiceField = new ObjectChoiceField();
+			_minFontSizeChoiceField.setLabel("Min font size:");
+			add(_minFontSizeChoiceField);
+			_minFontSizeChoiceField.setChoices(_fontSizes);
 		}
 		
 		protected void makeMenu(Menu menu, int instance) {			
@@ -291,7 +301,11 @@ public class NwsClient extends UiApplication
 				changed = true;
 				options.setMetric(_metricCheckBox.getChecked());
 			}
-			
+			int minFontSize = options.minFontSize();
+			if (minFontSize != (_minFontSizeChoiceField.getSelectedIndex() * 2 + 10)) {
+				changed = true;
+				options.setMinFontSize(_minFontSizeChoiceField.getSelectedIndex() * 2 + 10);
+			}
 			return changed;
 		}
 		
@@ -302,6 +316,7 @@ public class NwsClient extends UiApplication
 			_metricCheckBox.setChecked(options.metric());
 			_autoUpdateIconCheckBox.setChecked(options.autoUpdateIcon());
 			_newLocField.setText("");
+			_minFontSizeChoiceField.setSelectedIndex((options.minFontSize() - 10)/2);
 		}
 		
 		public void save()
@@ -1280,8 +1295,8 @@ public class NwsClient extends UiApplication
 		
 		// Grab some fonts...
 		FontFamily fontfam[] = FontFamily.getFontFamilies();
-		Font smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, 12);
-		Font tinyFont = smallFont.derive(Font.PLAIN, 11);
+		Font smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, options.minFontSize()+1);
+		Font tinyFont = smallFont.derive(Font.PLAIN, options.minFontSize());
 
 		// Make the title label
 		_mainScreen.setTitle(new LabelStatusField(address, LabelField.ELLIPSIS, "status..."));
@@ -1413,7 +1428,7 @@ public class NwsClient extends UiApplication
 		// Grab some fonts...
 		FontFamily fontfam[] = FontFamily.getFontFamilies();
 		Font smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, 12);
-		Font tinyFont = smallFont.derive(Font.PLAIN, 11);
+		Font tinyFont = smallFont.derive(Font.PLAIN, options.minFontSize());
 
 		// Make the title label
 		_mainScreen.setTitle(new LabelField(address, LabelField.ELLIPSIS));
@@ -1613,7 +1628,7 @@ public class NwsClient extends UiApplication
 		String credit = "Downloaded at "+formattedDate+
 						"\nfrom "+who+".";
 		RichTextField creditField = new RichTextField(credit);
-		Font small = creditField.getFont().derive(Font.PLAIN, 11);
+		Font small = creditField.getFont().derive(Font.PLAIN, options.minFontSize());
 		creditField.setFont(small);
 		_mainScreen.add(creditField);
 	}
@@ -2066,8 +2081,8 @@ public class NwsClient extends UiApplication
 		
 		FontFamily fontfam[] = FontFamily.getFontFamilies();
 		Font fnts[] = new Font[4];
-		fnts[0] = fontfam[0].getFont(FontFamily.SCALABLE_FONT, 14);
-		fnts[1] = fnts[0].derive(Font.PLAIN, 12);
+		fnts[0] = fontfam[0].getFont(FontFamily.SCALABLE_FONT, options.minFontSize()+4);
+		fnts[1] = fnts[0].derive(Font.PLAIN, options.minFontSize()+1);
 		
 		int fgColors[] = {0x00, 0x00, 0x00, 0x00, 0x00};
 		int bgColors[] = {0xffffff, 0xffffff, 0xffffff, 0xffffff, 0xffffff};

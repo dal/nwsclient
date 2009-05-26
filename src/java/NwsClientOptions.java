@@ -29,6 +29,7 @@ public class NwsClientOptions implements Persistable
 	private boolean _useNws = true;
 	private boolean _autoUpdateIcon = true;
 	private boolean _metric = false;
+	private int _minFontSize = 10;
 	
 	public NwsClientOptions()
 	{
@@ -81,6 +82,11 @@ public class NwsClientOptions implements Persistable
 		return _metric;
 	}
 	
+	public int minFontSize()
+	{
+		return _minFontSize;
+	}
+	
 	public void setUseNws(boolean use)
 	{
 		_useNws = use;
@@ -94,6 +100,11 @@ public class NwsClientOptions implements Persistable
 	public void setMetric(boolean metric)
 	{
 		_metric = metric;
+	}
+	
+	public void setMinFontSize(int size)
+	{
+		_minFontSize = size;
 	}
 
 }
