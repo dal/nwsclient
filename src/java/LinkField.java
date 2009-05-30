@@ -59,7 +59,7 @@ class LinkField extends Field implements DrawStyle
 	
 	public int getPreferredWidth() 
 	{
-		return _labelWidth;
+		return _labelWidth + 4;
 	}
 	
 	public int getPreferredHeight() 
