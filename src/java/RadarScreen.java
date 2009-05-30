@@ -21,9 +21,12 @@ package com.renderfast.nwsclient;
 
 import net.rim.device.api.system.Bitmap;
 import net.rim.device.api.system.RadioInfo;
-import net.rim.device.api.ui.Field;
+import net.rim.device.api.ui.*;
+import net.rim.device.api.ui.container.VerticalFieldManager;
 import net.rim.device.api.ui.component.Dialog;
 import net.rim.device.api.ui.component.LabelField;
+import net.rim.device.api.ui.component.RichTextField;
+import net.rim.device.api.ui.component.GaugeField;
 //import net.rim.device.api.ui.component.NullField;
 import net.rim.device.api.ui.UiApplication;
 import java.io.IOException;
@@ -31,8 +34,9 @@ import net.rim.device.api.ui.Graphics;
 
 public class RadarScreen extends AbstractScreen
 {
-	private final int UPDATE_INTERVAL = 300000; // 5 minutes
-	private final String NWS_URL = "http://radar.weather.gov/ridge/";
+	private static final int UPDATE_INTERVAL = 300000; // 5 minutes
+	private static final String NWS_URL = "http://radar.weather.gov/ridge";
+	private static final int MAX_TRIES = 99;
 	
 	private Thread _workerThread = null;
 	
@@ -43,30 +47,44 @@ public class RadarScreen extends AbstractScreen
 	private Bitmap _background;
 	private Bitmap _overlay;
 	
+	private GaugeField _progressGaugeField;
+	
 	private boolean _workerBusy = false;
 	
-	private class WorkerThread implements Runnable
+	private class WorkerThread implements Runnable 
 	{
-		private Bitmap fetchBitmap(final String url)
+		private Bitmap fetchBitmap(final String url) throws IOException
 		{
-			byte[] buff;
+			byte[] buff = new byte[100000];
 			int len = 0;
 			HttpHelper.Connection conn = null;
-			try {
-				conn = HttpHelper.getUrl(url);
-				buff = new byte[100000];
-				len = conn.is.read(buff, 0, 100000);
-			} catch (IOException e) {
-				System.err.println("Error reading bitmap buffer: "+e.toString());
-				return null;
-			} finally {
-				if (conn != null)
-					conn.close();
+			int tries = 0;
+			while(tries < MAX_TRIES) {
+				try {
+					tries += 1;
+					conn = HttpHelper.getUrl(url);
+					len = conn.is.read(buff, 0, 100000);
+					tries = MAX_TRIES; // success
+				} catch (IOException e) {
+					System.err.println("Error reading bitmap buffer: "+e.toString());
+					if (tries >= MAX_TRIES) {
+						throw new IOException(e.getMessage());
+					} else {
+						try {
+							Thread.sleep(1000); // wait a second...
+						} catch(InterruptedException ie) {
+							break;
+						}
+					}
+				} finally {
+					if (conn != null)
+						conn.close();
+				}
 			}
 			
 			if (len == 0) {
 				System.err.println("BitmapProvider: Got 0 bytes of data, bailing out");
-				return null;
+				throw new IOException("Got 0 bytes of data");
 			}
 			
 			final Bitmap bm;
@@ -74,7 +92,7 @@ public class RadarScreen extends AbstractScreen
 				bm = Bitmap.createBitmapFromBytes(buff, 0, -1, 1);
 			} catch (Exception e) {
 				System.err.println("Error decoding bitmap"+url+": "+e.toString());
-				return null;
+				throw new IOException(e.getMessage());
 			}
 			
 			return bm;
@@ -83,15 +101,21 @@ public class RadarScreen extends AbstractScreen
 		public void getDisplayRadar(final String station)
 		{
 			final String radarUrl = NWS_URL + "/RadarImg/N0R/"+station+"_N0R_0.gif";
-			Bitmap radarBm = fetchBitmap(radarUrl);
-			if (radarBm == null) {
-				UiApplication.getUiApplication().invokeLater(new Runnable() {
-					public void run()
-					{
-						setStatusVisible(false);
-						add(new LabelField("Error getting radar data from "+radarUrl));
-					}
-				} );
+			Bitmap radarBm = null;
+			try {
+				radarBm = fetchBitmap(radarUrl);
+			} catch(final IOException ioe) {
+				if (radarBm == null) {
+					UiApplication.getUiApplication().invokeLater(new Runnable() {
+						public void run()
+						{
+							setStatusVisible(false);
+							deleteAll();
+							add(new RichTextField("Error getting radar data from \n"
+									+radarUrl+":\n"+ioe.getMessage()));
+						}
+					} );
+				}
 				return;
 			}
 			int width = radarBm.getWidth();
@@ -129,7 +153,12 @@ public class RadarScreen extends AbstractScreen
 			String highwaysUrl = overlayUrl + "/Highways/Short/"+station+"_Highways_Short.gif";
 			String citiesUrl = overlayUrl + "/Cities/Short/"+station+"_City_Short.gif";
 			
-			_background = fetchBitmap(topoUrl);
+			try {
+				_background = fetchBitmap(topoUrl);
+				setProgress(1);
+			} catch(IOException ioe) {
+				System.err.println("Exception fetching background image: "+ioe.getMessage());
+			}
 			if (_background == null) {
 				System.err.println("Background bitmap came up empty");
 				return;
@@ -145,16 +174,25 @@ public class RadarScreen extends AbstractScreen
 				data[i] = 0x00000000; // no alpha
 			_overlay.setARGB(data, 0, width, 0, 0, width, height);
 			Graphics g = new Graphics(_overlay);
-			Bitmap countiesBm = fetchBitmap(countiesUrl);
+			Bitmap countiesBm = null;
+			Bitmap highwaysBm = null; 
+			Bitmap citiesBm = null;
+			try {
+				countiesBm = fetchBitmap(countiesUrl);
+				highwaysBm = fetchBitmap(highwaysUrl);
+				citiesBm = fetchBitmap(citiesUrl);
+			} catch(IOException ioe) {
+				System.err.println("Error fetching bitmap: "+ioe.getMessage());
+			}
 			if (countiesBm != null)
 				g.drawBitmap(0, 0, countiesBm.getWidth(), countiesBm.getHeight(), countiesBm, 0, 0);
-			Bitmap highwaysBm = fetchBitmap(highwaysUrl);
+			setProgress(2);
 			if (highwaysBm != null)
 				g.drawBitmap(0, 0, highwaysBm.getWidth(), highwaysBm.getHeight(), highwaysBm, 0, 0);
-			Bitmap citiesBm = fetchBitmap(citiesUrl);
+			setProgress(3);
 			if (citiesBm != null)
 				g.drawBitmap(0, 0, citiesBm.getWidth(), citiesBm.getHeight(), citiesBm, 0, 0);
-			
+			setProgress(4);
 		}
 		
 		public void run()
@@ -212,7 +250,22 @@ public class RadarScreen extends AbstractScreen
 	
 	public RadarScreen()
 	{
-		super("NWSClient", "loading...", (HORIZONTAL_SCROLL | VERTICAL_SCROLL));
+		
+		super("NWSClient", "loading...");
+		//VerticalFieldManager mainCol = new VerticalFieldManager(Manager.USE_ALL_HEIGHT);
+		_progressGaugeField = new GaugeField("Loading", 0, 5, 0, GaugeField.PERCENT);
+		//add(mainCol);
+		//mainCol.add(_progressGaugeField);
+		add(_progressGaugeField);
+	}
+	
+	public void setProgress(int value)
+	{
+		if (_progressGaugeField.isVisible()) {
+			synchronized(UiApplication.getEventLock()) {
+				_progressGaugeField.setValue(value);
+			}
+		}
 	}
 	
 	public void setNewLocation(LocationData loc)
