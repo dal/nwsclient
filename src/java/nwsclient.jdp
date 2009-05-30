@@ -39,7 +39,6 @@ nwsclient.rrh
 nwsclient_en.rrc
 NwsClientOptions.java
 ParseError.java
-RadarScreen.java
 RadarStation.java
 Station.java
 WeatherStation.java

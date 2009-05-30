@@ -54,6 +54,7 @@ public class NwsClient extends UiApplication
 	
 	private static final String NWS_XML_URL = "http://www.weather.gov/forecasts/xml/SOAP_server/ndfdXMLclient.php";
 	private static final String NWS_DAY_URL = "http://www.weather.gov/forecasts/xml/SOAP_server/ndfdSOAPclientByDay.php";
+	private static final String NWS_RADAR_URL = "http://radar.weather.gov/ridge/radar_lite.php?product=N0R&loop=no&rid=";
 	
 	private static final String NWS_CURRENT_URL = "http://www.weather.gov/xml/current_obs/";
 	
@@ -80,8 +81,6 @@ public class NwsClient extends UiApplication
 	private NwsClientScreen _mainScreen;
 	
 	private OptionsScreen _optionsScreen;
-	
-	private RadarScreen _radarScreen;
 	
 	private EditField _newLocField;
 	
@@ -771,7 +770,6 @@ public class NwsClient extends UiApplication
 			// started by the user
 			_mainScreen = new NwsClientScreen("NWSClient", "");
 			_optionsScreen = new OptionsScreen();
-			_radarScreen = new RadarScreen();
 			displaySplash(_mainScreen);
 			pushScreen(_mainScreen);
 			
@@ -1385,7 +1383,6 @@ public class NwsClient extends UiApplication
 				WfoStation tmp = new WfoStation();
 				WfoStation wfoStation = tmp.findNearest(location.getLat(), location.getLon());
 				String link = wfoStation.getForecastDiscussionLink();
-				System.err.println(link);
 				getLinkInBrowser(link);
 			}
 		};
@@ -1395,7 +1392,9 @@ public class NwsClient extends UiApplication
 		LinkField radarLink = new LinkField("Radar");
 		FieldChangeListener radarListener = new FieldChangeListener() {
 			public void fieldChanged(Field field, int context) {
-				getDisplayRadar();
+				RadarStation tmp = new RadarStation();
+				RadarStation rdr = tmp.findNearest(location.getLat(), location.getLon());
+				getLinkInBrowser(NWS_RADAR_URL+rdr.getName());
 			}
 		};
 		radarLink.setChangeListener(radarListener);
@@ -2036,29 +2035,6 @@ public class NwsClient extends UiApplication
 		scrn.setTitle(title);
 		displaySplash(scrn);
 		pushScreen(scrn);
-	}
-	
-	private void getDisplayRadar()
-	{
-		LocationData _location = options.getCurrentLocation();
-		if (_location == null) {
-			viewOptions();
-			return;
-		}
-		if (_location.getCountry().equals("US") && options.useNws()) {
-			_radarScreen.showRadar(_location);
-			synchronized (UiApplication.getEventLock()) {
-				if (_radarScreen.isVisible()) {
-					return;
-				} else {
-					pushScreen(_radarScreen);
-				}
-			}
-		} else {
-			synchronized (UiApplication.getEventLock()) {
-				Dialog.alert("Radar only available with US National Weather Service Data");
-			}
-		}
 	}
 	
 	private void displaySplash(final MainScreen scrn)
