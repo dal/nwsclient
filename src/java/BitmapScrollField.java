@@ -81,10 +81,10 @@ public class BitmapScrollField extends Field
 		int newXPos = _xPos;
 		int newYPos = _yPos;
 		if (width < _bitmap.getWidth()) {
-			newXPos = MathUtilities.clamp(0, _xPos + dx, _bitmap.getWidth() - width);
+			newXPos = MathUtilities.clamp(0, _xPos + dx * 10, _bitmap.getWidth() - width);
 		}
 		if (height < _bitmap.getHeight()) {
-			newYPos = MathUtilities.clamp(0, _yPos + dy, _bitmap.getWidth() - height);
+			newYPos = MathUtilities.clamp(0, _yPos + dy * 10, _bitmap.getWidth() - height);
 		}
 		
 		if (_xPos != newXPos || _yPos != newYPos) {
