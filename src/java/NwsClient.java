@@ -445,12 +445,10 @@ public class NwsClient extends UiApplication
 		
 		public void findNewLocation(final String newLocationInput)
 		{
-			UiApplication.getUiApplication().invokeLater(new Runnable() {
-				public void run() {
-					_mainScreen.setStatusText(resources_.getString(nwsclientResource.GETTING_LOCATION));
-					_mainScreen.setStatusVisible(true);
-				}
-			});
+			synchronized(UiApplication.getEventLock()) {
+				_mainScreen.setStatusText(resources_.getString(nwsclientResource.GETTING_LOCATION));
+				_mainScreen.setStatusVisible(true);
+			}
 			LocationData newLoc = null;
 			try {
 				newLoc = getLocationData(newLocationInput);
@@ -542,6 +540,10 @@ public class NwsClient extends UiApplication
 				} else {
 					_workerBusy = false;
 					// wait for radio service
+					synchronized(UiApplication.getEventLock()) {
+						_mainScreen.setStatusText(resources_.getString(nwsclientResource.WAITING_FOR_DATA));
+						_mainScreen.setStatusVisible(true);
+					}
 					try {
 						Thread.sleep(4000); // sleep for 4 seconds
 					} catch (InterruptedException e) {
@@ -801,11 +803,11 @@ public class NwsClient extends UiApplication
 	private boolean checkDataConnectionAndWarn()
 	{
 		if (!RadioInfo.isDataServiceOperational()) {
-			invokeLater(new Runnable() {
-				public void run() {
-					Dialog.alert(resources_.getString(nwsclientResource.NO_DATA));
-				}
-			});
+			synchronized(UiApplication.getEventLock()) {
+				_mainScreen.setStatusText(resources_.getString(nwsclientResource.WAITING_FOR_DATA));
+				_mainScreen.setStatusVisible(true);
+				Dialog.alert(resources_.getString(nwsclientResource.NO_DATA));
+			}
 			return false;
 		}
 		return true;
@@ -1852,12 +1854,10 @@ public class NwsClient extends UiApplication
 	private boolean getDisplayNWSAlerts(final LocationData location)
 	{
 		boolean alert = false;
-		invokeLater(new Runnable() {
-			public void run() {
-				_mainScreen.setStatusText(resources_.getString(nwsclientResource.GETTING_ALERTS));
-				_mainScreen.setStatusVisible(true);
-			}
-		});
+		synchronized(UiApplication.getEventLock()) {
+			_mainScreen.setStatusText(resources_.getString(nwsclientResource.GETTING_ALERTS));
+			_mainScreen.setStatusVisible(true);
+		}
 		try {
 			final Vector alerts = getAlerts(location);
 			alert = (alerts.size() > 0);
@@ -2003,12 +2003,10 @@ public class NwsClient extends UiApplication
 		// Indicate update is happening
 		location.setLastUpdated(System.currentTimeMillis());
 		
-		invokeLater(new Runnable() {
-			public void run() {
-				_mainScreen.setStatusText(resources_.getString(nwsclientResource.GETTING_WEATHER));
-				_mainScreen.setStatusVisible(true);
-			}
-		});
+		synchronized(UiApplication.getEventLock()) {
+			_mainScreen.setStatusText(resources_.getString(nwsclientResource.GETTING_WEATHER));
+			_mainScreen.setStatusVisible(true);
+		}
 		
 		String myCountry = location.getCountry();
 		if (myCountry.equals("US") && options.useNws()) {
