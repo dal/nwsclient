@@ -22,12 +22,9 @@ package com.renderfast.nwsclient;
 import net.rim.device.api.system.Bitmap;
 import net.rim.device.api.system.RadioInfo;
 import net.rim.device.api.ui.*;
-import net.rim.device.api.ui.container.VerticalFieldManager;
 import net.rim.device.api.ui.component.Dialog;
 import net.rim.device.api.ui.component.LabelField;
 import net.rim.device.api.ui.component.RichTextField;
-import net.rim.device.api.ui.component.GaugeField;
-//import net.rim.device.api.ui.component.NullField;
 import net.rim.device.api.ui.UiApplication;
 import java.io.IOException;
 import net.rim.device.api.ui.Graphics;
@@ -43,11 +40,6 @@ public class RadarScreen extends AbstractScreen
 	private LocationData _loc = null;
 	private LocationData _newLocation = null;
 	private String _radarStation = null;
-	
-	private Bitmap _background;
-	private Bitmap _overlay;
-	
-	private GaugeField _progressGaugeField;
 	
 	private boolean _workerBusy = false;
 	
@@ -100,7 +92,7 @@ public class RadarScreen extends AbstractScreen
 		
 		public void getDisplayRadar(final String station)
 		{
-			final String radarUrl = NWS_URL + "/RadarImg/N0R/"+station+"_N0R_0.gif";
+			final String radarUrl = NWS_URL + "/lite/N0R/"+station+"_0.png";
 			Bitmap radarBm = null;
 			try {
 				radarBm = fetchBitmap(radarUrl);
@@ -118,81 +110,17 @@ public class RadarScreen extends AbstractScreen
 				}
 				return;
 			}
-			int width = radarBm.getWidth();
-			int height = radarBm.getHeight();
-			final Bitmap compositeBm = new Bitmap(radarBm.getWidth(), radarBm.getHeight());
-			Graphics g = new Graphics(compositeBm);
-			g.drawBitmap(0, 0, width, height, _background, 0, 0);
-			g.drawBitmap(0, 0, width, height, radarBm, 0, 0);
-			g.drawBitmap(0, 0, width, height, _overlay, 0, 0);
-			if (radarBm != null) {
-				UiApplication.getUiApplication().invokeLater(new Runnable() {
-					public void run()
-					{
-						deleteAll();
-						setStatusVisible(false);
-						setTitleText(station+" radar");
-						BitmapScrollField radarField = new BitmapScrollField(compositeBm);
-						add(radarField);
-						radarField.centerView();
-						radarField.setFocus();
-					}
-				});
+			if (radarBm != null) {	
+				final BitmapScrollField radarField = new BitmapScrollField(radarBm);
+				synchronized (UiApplication.getEventLock()) {
+					deleteAll();
+					setStatusVisible(false);
+					setTitleText(station+" radar");
+					add(radarField);
+					radarField.centerView();
+					radarField.setFocus();
+				}
 			}
-		}
-		
-		public void getOverlayImages(final String station)
-		{
-			/* 
-			 * The overlay images are not likely to change as often as the radar
-			 * so we'll get them once and cache them.
-			 */
-			String overlayUrl = NWS_URL + "/Overlays";
-			String topoUrl = overlayUrl + "/Topo/Short/"+station+"_Topo_Short.jpg";
-			String countiesUrl = overlayUrl + "/County/Short/"+station+"_County_Short.gif";
-			String highwaysUrl = overlayUrl + "/Highways/Short/"+station+"_Highways_Short.gif";
-			String citiesUrl = overlayUrl + "/Cities/Short/"+station+"_City_Short.gif";
-			
-			try {
-				_background = fetchBitmap(topoUrl);
-				setProgress(1);
-			} catch(IOException ioe) {
-				System.err.println("Exception fetching background image: "+ioe.getMessage());
-			}
-			if (_background == null) {
-				System.err.println("Background bitmap came up empty");
-				return;
-			}
-			
-			// Layer all the overlays into one bitmap image
-			int width = _background.getWidth();
-			int height = _background.getHeight();
-			_overlay = new Bitmap(width, height);
-			_overlay.createAlpha(Bitmap.ALPHA_BITDEPTH_8BPP);
-			int [] data = new int[width * height];
-			for(int i=0; i < data.length; i++)
-				data[i] = 0x00000000; // no alpha
-			_overlay.setARGB(data, 0, width, 0, 0, width, height);
-			Graphics g = new Graphics(_overlay);
-			Bitmap countiesBm = null;
-			Bitmap highwaysBm = null; 
-			Bitmap citiesBm = null;
-			try {
-				countiesBm = fetchBitmap(countiesUrl);
-				highwaysBm = fetchBitmap(highwaysUrl);
-				citiesBm = fetchBitmap(citiesUrl);
-			} catch(IOException ioe) {
-				System.err.println("Error fetching bitmap: "+ioe.getMessage());
-			}
-			if (countiesBm != null)
-				g.drawBitmap(0, 0, countiesBm.getWidth(), countiesBm.getHeight(), countiesBm, 0, 0);
-			setProgress(2);
-			if (highwaysBm != null)
-				g.drawBitmap(0, 0, highwaysBm.getWidth(), highwaysBm.getHeight(), highwaysBm, 0, 0);
-			setProgress(3);
-			if (citiesBm != null)
-				g.drawBitmap(0, 0, citiesBm.getWidth(), citiesBm.getHeight(), citiesBm, 0, 0);
-			setProgress(4);
 		}
 		
 		public void run()
@@ -207,18 +135,12 @@ public class RadarScreen extends AbstractScreen
 							setStatusVisible(true);
 						}
 					} );
-					System.err.println("New location: "+newLoc.getIcao()); // debug debug
 					_workerBusy = true;
 					_loc = newLoc;
 					setNewLocation(null);
 					RadarStation tmp = new RadarStation();
 					RadarStation rdr = tmp.findNearest(_loc.getLat(), _loc.getLon());
-					if (_radarStation != rdr.getName()) {
-						_radarStation = rdr.getName();
-						getOverlayImages(_radarStation);
-					} else {
-						System.err.println("Radar station is the same");
-					}
+					_radarStation = rdr.getName();
 				} else {
 					System.err.println("No new location"); // debug debug 
 				}
@@ -250,22 +172,7 @@ public class RadarScreen extends AbstractScreen
 	
 	public RadarScreen()
 	{
-		
 		super("NWSClient", "loading...");
-		//VerticalFieldManager mainCol = new VerticalFieldManager(Manager.USE_ALL_HEIGHT);
-		_progressGaugeField = new GaugeField("Loading", 0, 5, 0, GaugeField.PERCENT);
-		//add(mainCol);
-		//mainCol.add(_progressGaugeField);
-		add(_progressGaugeField);
-	}
-	
-	public void setProgress(int value)
-	{
-		if (_progressGaugeField.isVisible()) {
-			synchronized(UiApplication.getEventLock()) {
-				_progressGaugeField.setValue(value);
-			}
-		}
 	}
 	
 	public void setNewLocation(LocationData loc)
