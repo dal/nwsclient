@@ -23,7 +23,6 @@ ExcludeFromBuildAll=0
 AbstractScreen.java
 AmbiguousLocationException.java
 BitmapProvider.java
-BitmapScrollField.java
 data\radar_stations.data
 data\weather_stations.data
 data\wfo.data
