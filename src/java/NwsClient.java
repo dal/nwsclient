@@ -72,9 +72,7 @@ public class NwsClient extends UiApplication
 	
 	private Thread _workerThread;
 	
-	private String newLocation_;
-	
-	private LocationData currentLocation_;
+	private String _newLocation;
 	
 	private BitmapProvider _bitmapProvider;
 	
@@ -84,7 +82,7 @@ public class NwsClient extends UiApplication
 	
 	private EditField _newLocField;
 	
-	private static ResourceBundle resources_ = ResourceBundle.getBundle(nwsclientResource.BUNDLE_ID, nwsclientResource.BUNDLE_NAME);
+	private static ResourceBundle _resources = ResourceBundle.getBundle(nwsclientResource.BUNDLE_ID, nwsclientResource.BUNDLE_NAME);
 	
 	private boolean _foreground = false;
 	
@@ -175,7 +173,7 @@ public class NwsClient extends UiApplication
 						if (_workerBusy) {
 							// warn if we're already fetching weather
 							synchronized(UiApplication.getEventLock()) {
-								Dialog.alert(resources_.getString(nwsclientResource.BUSY));
+								Dialog.alert(_resources.getString(nwsclientResource.BUSY));
 							}
 							return;
 						}
@@ -204,14 +202,14 @@ public class NwsClient extends UiApplication
 		 */
 		public OptionsScreen()
 		{
-			//super("NWSClient "+resources_.getString(nwsclientResource.OPTIONS), "");
+			//super("NWSClient "+_resources.getString(nwsclientResource.OPTIONS), "");
 			super();
-			_newLocField = new EditField((resources_.getString(nwsclientResource.LOCATION)+": "), 
+			_newLocField = new EditField((_resources.getString(nwsclientResource.LOCATION)+": "), 
 							null, Integer.MAX_VALUE, EditField.FILTER_DEFAULT);
 			add(_newLocField);
 			
 			_recentLocationsChoiceField = new ObjectChoiceField();
-			_recentLocationsChoiceField.setLabel(resources_.getString(nwsclientResource.RECENT_LOCATIONS)+":");
+			_recentLocationsChoiceField.setLabel(_resources.getString(nwsclientResource.RECENT_LOCATIONS)+":");
 			_recentLocationsChoiceField.setChangeListener(new recentLocListener());
 			add(_recentLocationsChoiceField);
 			
@@ -242,7 +240,7 @@ public class NwsClient extends UiApplication
 		
 		protected void makeMenu(Menu menu, int instance) {			
 			menu.add(_newLocationMenuItem);
-			MenuItem showLicenseMenuItem = new MenuItem(resources_.getString(nwsclientResource.ABOUT), 100, 10) {
+			MenuItem showLicenseMenuItem = new MenuItem(_resources.getString(nwsclientResource.ABOUT), 100, 10) {
 				public void run()
 				{
 					displayLicense();
@@ -322,7 +320,7 @@ public class NwsClient extends UiApplication
 		{
 			if (_workerBusy) {
 				synchronized(UiApplication.getEventLock()) {
-					Dialog.alert(resources_.getString(nwsclientResource.BUSY));
+					Dialog.alert(_resources.getString(nwsclientResource.BUSY));
 				}
 				return;
 			}
@@ -445,7 +443,7 @@ public class NwsClient extends UiApplication
 		public void findNewLocation(final String newLocationInput)
 		{
 			synchronized(UiApplication.getEventLock()) {
-				_mainScreen.setStatusText(resources_.getString(nwsclientResource.GETTING_LOCATION));
+				_mainScreen.setStatusText(_resources.getString(nwsclientResource.GETTING_LOCATION));
 				_mainScreen.setStatusVisible(true);
 			}
 			LocationData newLoc = null;
@@ -540,7 +538,7 @@ public class NwsClient extends UiApplication
 					_workerBusy = false;
 					// wait for radio service
 					synchronized(UiApplication.getEventLock()) {
-						_mainScreen.setStatusText(resources_.getString(nwsclientResource.WAITING_FOR_DATA));
+						_mainScreen.setStatusText(_resources.getString(nwsclientResource.WAITING_FOR_DATA));
 						_mainScreen.setStatusVisible(true);
 					}
 					try {
@@ -632,9 +630,7 @@ public class NwsClient extends UiApplication
 	{
 		// Return a copy of the string
 		synchronized(this) {
-			if (newLocation_ == null)
-				return null;
-			return new String(newLocation_);
+			return _newLocation;
 		}
 	}
 	
@@ -642,7 +638,7 @@ public class NwsClient extends UiApplication
 	public void setNewLocation(String newLocation)
 	{
 		synchronized(this) {
-			newLocation_ = newLocation;
+			_newLocation = newLocation;
 		}
 	}
 	
@@ -687,19 +683,19 @@ public class NwsClient extends UiApplication
 	// menu items
 	// cache menu items for reuse
 	
-	private MenuItem optionsMenuItem_ = new MenuItem(resources_.getString(nwsclientResource.OPTIONS), 110, 10) {
+	private MenuItem optionsMenuItem_ = new MenuItem(_resources.getString(nwsclientResource.OPTIONS), 110, 10) {
 		public void run()
 		{
 			viewOptions();
 		}
 	};
 	
-	private MenuItem refreshMenuItem_ = new MenuItem(resources_.getString(nwsclientResource.REFRESH), 110, 10) {
+	private MenuItem refreshMenuItem_ = new MenuItem(_resources.getString(nwsclientResource.REFRESH), 110, 10) {
 		public void run()
 		{
 			if (_workerBusy) {
 				synchronized(UiApplication.getEventLock()) {
-					Dialog.alert(resources_.getString(nwsclientResource.BUSY));
+					Dialog.alert(_resources.getString(nwsclientResource.BUSY));
 				}
 				return;
 			}
@@ -708,13 +704,13 @@ public class NwsClient extends UiApplication
 		}
 	};
 	
-	private MenuItem _newLocationMenuItem = new MenuItem(resources_.getString(nwsclientResource.GET_FORECAST), 100, 10) {
+	private MenuItem _newLocationMenuItem = new MenuItem(_resources.getString(nwsclientResource.GET_FORECAST), 100, 10) {
 		public void run()
 		{
 			if (_newLocField.getText().length() > 0) {
 				if (_workerBusy) {
 					synchronized(UiApplication.getEventLock()) {
-						Dialog.alert(resources_.getString(nwsclientResource.BUSY));
+						Dialog.alert(_resources.getString(nwsclientResource.BUSY));
 					}
 					return;
 				}
@@ -729,7 +725,7 @@ public class NwsClient extends UiApplication
 				}
 			} else {
 				synchronized(UiApplication.getEventLock()) {
-					Dialog.alert(resources_.getString(nwsclientResource.BUSY));
+					Dialog.alert(_resources.getString(nwsclientResource.BUSY));
 				}
 			}
 		}
@@ -802,9 +798,9 @@ public class NwsClient extends UiApplication
 	{
 		if (!RadioInfo.isDataServiceOperational()) {
 			synchronized(UiApplication.getEventLock()) {
-				_mainScreen.setStatusText(resources_.getString(nwsclientResource.WAITING_FOR_DATA));
+				_mainScreen.setStatusText(_resources.getString(nwsclientResource.WAITING_FOR_DATA));
 				_mainScreen.setStatusVisible(true);
-				Dialog.alert(resources_.getString(nwsclientResource.NO_DATA));
+				Dialog.alert(_resources.getString(nwsclientResource.NO_DATA));
 			}
 			return false;
 		}
@@ -1305,7 +1301,7 @@ public class NwsClient extends UiApplication
 		_mainScreen.add(main);
 		
 		// Current Conditions Label
-		LabelField lbl = new LabelField(resources_.getString(nwsclientResource.CURRENT_CONDITIONS_AT)+
+		LabelField lbl = new LabelField(_resources.getString(nwsclientResource.CURRENT_CONDITIONS_AT)+
 									" "+location.getIcao());
 		Font fnt = lbl.getFont().derive(Font.BOLD);
 		lbl.setFont(fnt);
@@ -1438,7 +1434,7 @@ public class NwsClient extends UiApplication
 		_mainScreen.add(main);
 		
 		// Current Conditions Label
-		LabelField lbl = new LabelField(resources_.getString(nwsclientResource.CURRENT_CONDITIONS),
+		LabelField lbl = new LabelField(_resources.getString(nwsclientResource.CURRENT_CONDITIONS),
 							LabelField.ELLIPSIS);
 		Font fnt = lbl.getFont().derive(Font.BOLD);
 		lbl.setFont(fnt);
@@ -1854,7 +1850,7 @@ public class NwsClient extends UiApplication
 	{
 		boolean alert = false;
 		synchronized(UiApplication.getEventLock()) {
-			_mainScreen.setStatusText(resources_.getString(nwsclientResource.GETTING_ALERTS));
+			_mainScreen.setStatusText(_resources.getString(nwsclientResource.GETTING_ALERTS));
 			_mainScreen.setStatusVisible(true);
 		}
 		try {
@@ -1891,7 +1887,7 @@ public class NwsClient extends UiApplication
 	private void getDisplayNWSForecast(final LocationData location)
 	{
 		synchronized (UiApplication.getEventLock()) {
-			_mainScreen.setStatusText(resources_.getString(nwsclientResource.GETTING_FORECAST));
+			_mainScreen.setStatusText(_resources.getString(nwsclientResource.GETTING_FORECAST));
 			_mainScreen.setStatusVisible(true);
 		}
 		// The forecast observations we're interested in...
@@ -2003,7 +1999,7 @@ public class NwsClient extends UiApplication
 		location.setLastUpdated(System.currentTimeMillis());
 		
 		synchronized(UiApplication.getEventLock()) {
-			_mainScreen.setStatusText(resources_.getString(nwsclientResource.GETTING_WEATHER));
+			_mainScreen.setStatusText(_resources.getString(nwsclientResource.GETTING_WEATHER));
 			_mainScreen.setStatusVisible(true);
 		}
 		
@@ -2030,7 +2026,7 @@ public class NwsClient extends UiApplication
 	private void displayLicense()
 	{
 		MainScreen scrn = new AbstractScreen();
-		LabelField title = new LabelField(resources_.getString(nwsclientResource.ABOUT), 
+		LabelField title = new LabelField(_resources.getString(nwsclientResource.ABOUT), 
 			LabelField.ELLIPSIS | LabelField.USE_ALL_WIDTH);
 		scrn.setTitle(title);
 		displaySplash(scrn);
@@ -2048,10 +2044,10 @@ public class NwsClient extends UiApplication
 		ApplicationDescriptor ad = ApplicationDescriptor.currentApplicationDescriptor();
 		splash[0] = "NWSClient\n";
 		splash[1] = "version " + ad.getVersion() + "\n" + 
-					resources_.getString(nwsclientResource.SPLASH1)+"\n";
-		splash[2] = resources_.getString(nwsclientResource.SPLASH2)+"\n";
-		splash[3] = resources_.getString(nwsclientResource.SPLASH3) +"\n"+
-					resources_.getString(nwsclientResource.SPLASH4);
+					_resources.getString(nwsclientResource.SPLASH1)+"\n";
+		splash[2] = _resources.getString(nwsclientResource.SPLASH2)+"\n";
+		splash[3] = _resources.getString(nwsclientResource.SPLASH3) +"\n"+
+					_resources.getString(nwsclientResource.SPLASH4);
 		
 		FontFamily fontfam[] = FontFamily.getFontFamilies();
 		Font fnts[] = new Font[4];
