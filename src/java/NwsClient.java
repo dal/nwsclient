@@ -30,6 +30,7 @@ import net.rim.device.api.i18n.SimpleDateFormat.*;
 import net.rim.device.api.system.ApplicationDescriptor.*;
 import net.rim.blackberry.api.browser.Browser;
 import net.rim.blackberry.api.browser.BrowserSession;
+import net.rim.device.api.math.Fixed32;
 import javax.microedition.global.*;
 import javax.microedition.io.*;
 import java.util.*;
@@ -594,34 +595,46 @@ public class NwsClient extends UiApplication
 	
 	public static synchronized void updateIcon(String temp, boolean alert)
 	{
-		int lOffset = 22; // left offset, two chars long
+		if (!HomeScreen.supportsIcons()) 
+			return;
+		
+		int lOffset = 36; // left offset, two chars long
+		FontFamily fontfam[] = FontFamily.getFontFamilies();
+		Font smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, 18);
+		
 		if (temp.length() == 1) {
 			// Single digits!
-			lOffset = 25;
+			lOffset = 41;
 		} else if (temp.length() == 3) { 
 			// move to the left if 3 chars long
-			lOffset = 20;
+			lOffset = 32;
+			smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, 16);
 		} else if (temp.length() > 3) {
 			// Crazy temperature!
-			lOffset = 20;
-			temp = "NWS";
+			lOffset = 32;
+			temp = "err";
+			smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, 16);
 		}
 		Bitmap bg = Bitmap.getBitmapResource("icon.png");
 		Graphics gfx = new Graphics(bg);
-		FontFamily fontfam[] = FontFamily.getFontFamilies();
-		Font smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, 12);
+		
 		if (alert) {
 			gfx.setColor(0xffff33); // yellow text
-			gfx.fillArc(5, 18, 16, 16, 0, 360);
-			gfx.setColor(0xff3333); // red background
-			gfx.drawArc(6, 19, 14, 14, 0, 360);
+			gfx.fillArc(8, 39, 28, 28, 0, 360);
+			gfx.setColor(0xff3333); // red edge, text
+			gfx.drawArc(10, 41, 24, 24, 0, 360);
 			Font boldFont = smallFont.derive(Font.BOLD);
 			gfx.setFont(boldFont);
-			gfx.drawText("!", 11, 20); // Exclamation point
+			gfx.drawText("!", 18, 44); // Exclamation point
 		}
 		gfx.setFont(smallFont);
-		gfx.drawText(temp, lOffset, 12);
+		gfx.drawText(temp, lOffset, 29);
+		
+		int w = bg.getWidth();
+		int h = bg.getHeight();
+		
 		HomeScreen.updateIcon(bg, 1);
+		
 	}
 	
 	/* Class methods */

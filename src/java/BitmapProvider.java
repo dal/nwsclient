@@ -21,12 +21,11 @@ import java.util.*;
 import java.io.*;
 import net.rim.device.api.ui.component.*;
 import net.rim.device.api.system.*;
+import net.rim.device.api.math.Fixed32;
 import net.rim.blackberry.api.homescreen.HomeScreen;
 
 public class BitmapProvider extends Thread
 {
-	
-	private static int[] iconSize = { 48, 36 };
 	
 	private Vector urls;
 	private Vector fields;
@@ -117,22 +116,28 @@ public class BitmapProvider extends Thread
 	
 	public void setRolloverIcon(final EncodedImage img)
 	{
+		if (!HomeScreen.supportsIcons()) 
+			return;
+		
 		int w = img.getWidth();
 		int h = img.getHeight();
+		int appIconSize = 73; // the dimensions of the existing app icon 
 		int scale = 10000;
 		
-		if (w > iconSize[0]) {
-			double sc = (double)iconSize[0] / w;
-			scale = (int)(sc * 10000.);
+		if (w == 0 || h == 0) {
+			System.err.println("setRolloverIcon error: Got zero-size length rollover icon");
+			return;
 		}
 		
-		if (h > iconSize[1]) {
-			double sc = (double)iconSize[1] / h;
-			scale = Math.max(scale, (int)(sc * 10000.));
+		if (w != appIconSize || h != appIconSize) {
+			// Fit to larger dimension
+			if (w >= h) 
+				scale = Fixed32.div(Fixed32.toFP(w), Fixed32.toFP(appIconSize));
+			else 
+				scale = Fixed32.div(Fixed32.toFP(h), Fixed32.toFP(appIconSize));
 		}
 		
 		EncodedImage copy = img.scaleImage32(scale, scale);
-		
 		HomeScreen.setRolloverIcon(copy.getBitmap(), 1);
 	}
 	
