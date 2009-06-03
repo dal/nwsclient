@@ -602,6 +602,13 @@ public class NwsClient extends UiApplication
 		FontFamily fontfam[] = FontFamily.getFontFamilies();
 		Font smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, 18);
 		
+		// Strip off anything after a decimal point
+		int decPos = temp.indexOf('.');
+		if (decPos != -1) {
+			// We've got a decimal point, get rid of it
+			temp = temp.substring(0, decPos);
+		}
+		
 		if (temp.length() == 1) {
 			// Single digits!
 			lOffset = 41;
@@ -629,9 +636,6 @@ public class NwsClient extends UiApplication
 		}
 		gfx.setFont(smallFont);
 		gfx.drawText(temp, lOffset, 29);
-		
-		int w = bg.getWidth();
-		int h = bg.getHeight();
 		
 		HomeScreen.updateIcon(bg, 1);
 		
