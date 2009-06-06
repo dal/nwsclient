@@ -598,9 +598,9 @@ public class NwsClient extends UiApplication
 		if (!HomeScreen.supportsIcons()) 
 			return;
 		
-		int lOffset = 36; // left offset, two chars long
+		int lOffset = 22; // left offset, two chars long
 		FontFamily fontfam[] = FontFamily.getFontFamilies();
-		Font smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, 18);
+		Font smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, 12);
 		
 		// Strip off anything after a decimal point
 		int decPos = temp.indexOf('.');
@@ -611,32 +611,29 @@ public class NwsClient extends UiApplication
 		
 		if (temp.length() == 1) {
 			// Single digits!
-			lOffset = 41;
+			lOffset = 25;
 		} else if (temp.length() == 3) { 
 			// move to the left if 3 chars long
-			lOffset = 32;
-			smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, 16);
+			lOffset = 20;
 		} else if (temp.length() > 3) {
 			// Crazy temperature!
 			lOffset = 32;
 			temp = "err";
-			smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, 16);
+			smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, 10);
 		}
 		Bitmap bg = Bitmap.getBitmapResource("icon.png");
 		Graphics gfx = new Graphics(bg);
-		
 		if (alert) {
 			gfx.setColor(0xffff33); // yellow text
-			gfx.fillArc(8, 39, 28, 28, 0, 360);
-			gfx.setColor(0xff3333); // red edge, text
-			gfx.drawArc(10, 41, 24, 24, 0, 360);
+			gfx.fillArc(5, 18, 16, 16, 0, 360);
+			gfx.setColor(0xff3333); // red background
+			gfx.drawArc(6, 19, 14, 14, 0, 360);
 			Font boldFont = smallFont.derive(Font.BOLD);
 			gfx.setFont(boldFont);
-			gfx.drawText("!", 18, 44); // Exclamation point
+			gfx.drawText("!", 11, 20); // Exclamation point
 		}
 		gfx.setFont(smallFont);
-		gfx.drawText(temp, lOffset, 29);
-		
+		gfx.drawText(temp, lOffset, 12);
 		HomeScreen.updateIcon(bg, 1);
 		
 	}
