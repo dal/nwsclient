@@ -362,8 +362,9 @@ public class NwsClient extends UiApplication
 				boolean alert = (alerts.size() > 0);
 				if (conditions != null && conditions.containsKey("temperature")) {
 					String temp = (String)conditions.get("temperature");
+					String cond = (String)conditions.get("condition");
 					
-					updateIcon(temp, alert);
+					updateIcon(temp, cond, alert);
 					
 					String rolloverIconUrl = (String)conditions.get("icon_url");
 					
@@ -593,7 +594,7 @@ public class NwsClient extends UiApplication
 		}
 	}
 	
-	public static synchronized void updateIcon(String temp, boolean alert)
+	public static synchronized void updateIcon(String temp, String condition, boolean alert)
 	{
 		if (!HomeScreen.supportsIcons()) 
 			return;
@@ -635,7 +636,8 @@ public class NwsClient extends UiApplication
 		gfx.setFont(smallFont);
 		gfx.drawText(temp, lOffset, 12);
 		HomeScreen.updateIcon(bg, 1);
-		
+		// App name is our current condition string
+		HomeScreen.setName(condition, 1);
 	}
 	
 	/* Class methods */
@@ -1262,7 +1264,11 @@ public class NwsClient extends UiApplication
 		
 	private synchronized void clearScreen()
 	{
+		String statusText = _mainScreen.getStatusText();
+		boolean statusVisible = _mainScreen.setStatusVisible();
 		_mainScreen.deleteAll();
+		_mainScreen.setStatusText(statusText);
+		_mainScreen.setStatusVisible(statusVisible);
 	}
 	
 	private void displayNWSCurrentConditions(final LocationData location, final Hashtable weather)
@@ -1422,8 +1428,9 @@ public class NwsClient extends UiApplication
 		if (weather == null) {
 			_mainScreen.add(new LabelField("Unable to fetch current conditions"));
 			return;
-		} else if (weather.containsKey("temperature")) {
-			updateIcon((String)weather.get("temperature"), false);
+		} else if (weather.containsKey("temperature") && (weather.containsKey("condition"))) {
+			updateIcon((String)weather.get("temperature"), 
+									(String)weather.get("condition"), false);
 		}
 		
 		//String address = (String)weather.get("city");
@@ -1956,9 +1963,9 @@ public class NwsClient extends UiApplication
 	 * data for the requested location.
 	 * @param location The LocationData object for which to get the forecast
 	 */
-	private String getDisplayNWSCurrentConditions(final LocationData location)
+	private String[] getDisplayNWSCurrentConditions(final LocationData location)
 	{
-		String temp = "";
+		String[] conditions = {"", ""};
 		if (location.getIcao().equals("")) {
 			UiApplication.getUiApplication().invokeLater(new Runnable() {
 				public void run()
@@ -1977,8 +1984,9 @@ public class NwsClient extends UiApplication
 		try {
 			final Hashtable parsed = getParseCurrentConditions(location);
 			if (parsed != null && parsed.containsKey("temperature")) {
-				// Remember the temperature to pass to the icon updater
-				temp = (String)parsed.get("temperature");
+				// Remember the temperature and condition to pass to the icon updater
+				conditions[0] = (String)parsed.get("temperature");
+				conditions[1] = (String)parsed.get("condition");
 			}
 			UiApplication.getUiApplication().invokeLater(new Runnable() {
 				public void run()
@@ -2020,12 +2028,12 @@ public class NwsClient extends UiApplication
 		String myCountry = location.getCountry();
 		if (myCountry.equals("US") && options.useNws()) {
 			// United States - Get NWS NDFD data 	
-			String temp = getDisplayNWSCurrentConditions(location);
+			String weather[] = getDisplayNWSCurrentConditions(location);
 			
 			// Alerts!
 			boolean alert = getDisplayNWSAlerts(location);
 			
-			updateIcon(temp, alert);
+			updateIcon(weather[0], weather[1], alert);
 			
 			// Separate call for the forecast
 			getDisplayNWSForecast(location);
