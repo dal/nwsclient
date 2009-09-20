@@ -152,6 +152,8 @@ public class NwsClient extends UiApplication
 		private ObjectChoiceField _recentLocationsChoiceField;
 		private CheckboxField _useNwsCheckBox;
 		private CheckboxField _autoUpdateIconCheckBox;
+		private CheckboxField _changeAppRolloverIconCheckBox;
+		private CheckboxField _changeAppNameCheckBox;
 		private CheckboxField _metricCheckBox;
 		private ObjectChoiceField _minFontSizeChoiceField;
 		
@@ -232,6 +234,10 @@ public class NwsClient extends UiApplication
 			add(_autoUpdateIconCheckBox);
 			_metricCheckBox = new CheckboxField("Temperature in Celsius", options.metric());
 			add(_metricCheckBox);
+			_changeAppRolloverIconCheckBox = new CheckboxField("App rollover icon shows current conditions", options.changeAppRolloverIcon());
+			add(_changeAppRolloverIconCheckBox);
+			_changeAppNameCheckBox = new CheckboxField("App name is weather info", options.changeAppName());
+			add(_changeAppNameCheckBox);
 			
 			_minFontSizeChoiceField = new ObjectChoiceField();
 			_minFontSizeChoiceField.setLabel("Min font size:");
@@ -304,6 +310,16 @@ public class NwsClient extends UiApplication
 				changed = true;
 				options.setMinFontSize(_minFontSizeChoiceField.getSelectedIndex() * 2 + 10);
 			}
+			boolean changeAppName = options.changeAppName();
+			if (changeAppName != _changeAppNameCheckBox.getChecked()) {
+				changed = true;
+				options.setChangeAppName(_changeAppNameCheckBox.getChecked());
+			}
+			boolean changeAppRolloverIcon = options.changeAppRolloverIcon();
+			if (changeAppRolloverIcon != _changeAppRolloverIconCheckBox.getChecked()) {
+				changed = true;
+				options.setChangeAppRolloverIcon(_changeAppRolloverIconCheckBox.getChecked());
+			}
 			return changed;
 		}
 		
@@ -364,13 +380,14 @@ public class NwsClient extends UiApplication
 					String temp = (String)conditions.get("temperature");
 					String cond = (String)conditions.get("condition");
 					
-					updateIcon(temp, cond, alert);
+					updateIcon(location_, temp, cond, alert);
 					
-					String rolloverIconUrl = (String)conditions.get("icon_url");
-					
-					// get the rollover icon
-					final EncodedImage img = _bitmapProvider.fetchBitmap(rolloverIconUrl);
-					_bitmapProvider.setRolloverIcon(img);
+					if (options.changeAppRolloverIcon()) {
+						String rolloverIconUrl = (String)conditions.get("icon_url");
+						// get the rollover icon
+						final EncodedImage img = _bitmapProvider.fetchBitmap(rolloverIconUrl);
+						_bitmapProvider.setRolloverIcon(img);
+					}
 					
 				} else {
 					System.err.println("Error getting icon current conditions: null current conditions");
@@ -594,7 +611,8 @@ public class NwsClient extends UiApplication
 		}
 	}
 	
-	public static synchronized void updateIcon(String temp, String condition, boolean alert)
+	public static synchronized void updateIcon(final LocationData loc, 
+								String temp, String condition, boolean alert)
 	{
 		if (!HomeScreen.supportsIcons()) 
 			return;
@@ -636,8 +654,22 @@ public class NwsClient extends UiApplication
 		gfx.setFont(smallFont);
 		gfx.drawText(temp, lOffset, 12);
 		HomeScreen.updateIcon(bg, 1);
-		// App name is our current condition string
-		HomeScreen.setName(condition, 1);
+		
+		if (options.changeAppName()) { 
+			// App name is the temperature, current condition string
+			String tempType = (options.metric()) ? "C, " : "\u00b0F, ";
+			String appName = (loc.getLocality() + ": " + temp + tempType + condition);
+			HomeScreen.setName(appName, 1);
+		} else {
+			HomeScreen.setName("NWSClient", 1);
+		}
+		
+		if (!options.changeAppRolloverIcon()) {
+			// If we're not changing the rollover icon make
+			// sure the rollover is the same as the regular icon
+			HomeScreen.setRolloverIcon(bg, 1);
+		}
+		
 	}
 	
 	/* Class methods */
@@ -847,6 +879,30 @@ public class NwsClient extends UiApplication
 		loc.setIcaoLon(weatherStation.getLon()); // longitude in radians
 		
 		return true;
+	}
+	
+	private void displayGoogleMap(final LocationData location)
+	{
+		/* from http://www.blackberryforums.com/developer-forum/143263-heres-how-start-google-maps-landmark.html */
+		
+		int mh = CodeModuleManager.getModuleHandle("GoogleMaps");
+		if (mh == 0) {
+			Dialog.alert("Google Maps is not installed");
+			return;
+		}
+		URLEncodedPostData uepd = new URLEncodedPostData(null, false);
+		uepd.append("action","LOCN");
+		uepd.append("a", "@latlon:"+location.getLat()+","+location.getLon());
+		uepd.append("title", (location.getLocality()+", "+location.getArea()));
+		uepd.append("description", location.getIcao());
+		String[] args = { "http://gmm/x?"+uepd.toString() };
+		ApplicationDescriptor ad = CodeModuleManager.getApplicationDescriptors(mh)[0];
+		ApplicationDescriptor ad2 = new ApplicationDescriptor(ad, args);
+		try {
+			ApplicationManager.getApplicationManager().runApplication(ad2, true);
+		} catch (ApplicationManagerException e) {
+			Dialog.alert("Error launching Google Maps: "+e.toString());
+		}
 	}
 		
 	private LocationData getLocationData(String userAddress) throws NotFoundException {
@@ -1265,7 +1321,7 @@ public class NwsClient extends UiApplication
 	private synchronized void clearScreen()
 	{
 		String statusText = _mainScreen.getStatusText();
-		boolean statusVisible = _mainScreen.setStatusVisible();
+		boolean statusVisible = _mainScreen.getStatusVisible();
 		_mainScreen.deleteAll();
 		_mainScreen.setStatusText(statusText);
 		_mainScreen.setStatusVisible(statusVisible);
@@ -1344,7 +1400,7 @@ public class NwsClient extends UiApplication
 		topHField.add(currentCondBitmap);
 		
 		if (!condIconUrl.equals("")) {
-			_bitmapProvider.getBitmap(condIconUrl, currentCondBitmap, true);
+			_bitmapProvider.getBitmap(condIconUrl, currentCondBitmap, options.changeAppRolloverIcon());
 		}
 		
 		VerticalFieldManager topRightCol = new VerticalFieldManager();
@@ -1429,7 +1485,7 @@ public class NwsClient extends UiApplication
 			_mainScreen.add(new LabelField("Unable to fetch current conditions"));
 			return;
 		} else if (weather.containsKey("temperature") && (weather.containsKey("condition"))) {
-			updateIcon((String)weather.get("temperature"), 
+			updateIcon(location, (String)weather.get("temperature"), 
 									(String)weather.get("condition"), false);
 		}
 		
@@ -1472,7 +1528,7 @@ public class NwsClient extends UiApplication
 		BitmapField currentCondBitmap = new BitmapField();
 		
 		if (!condIconUrl.equals("")) {
-			_bitmapProvider.getBitmap(condIconUrl, currentCondBitmap, true);
+			_bitmapProvider.getBitmap(condIconUrl, currentCondBitmap, options.changeAppRolloverIcon());
 		}
 		
 		topHField.add(currentCondBitmap);
@@ -1532,7 +1588,8 @@ public class NwsClient extends UiApplication
 	 * @param forecast The forecast Vector object (see above)
 	 *
 	 */
-	private void displayForecast(LocationData location, Vector forecast, String credit)
+	private void displayForecast(final LocationData location, final Vector forecast, 
+															final String credit)
 	{
 		for (int i=0; i < forecast.size(); i++) {
 			
@@ -1580,6 +1637,16 @@ public class NwsClient extends UiApplication
 		if (forecast.size() == 0) {
 			_mainScreen.add(new RichTextField("Error: No NWS Forecast information found."));
 		}
+		
+		// Google Maps link... 
+		LinkField googleMapsLink = new LinkField("Google Map");
+		FieldChangeListener listener = new FieldChangeListener() {
+			public void fieldChanged(Field field, int context) {
+				displayGoogleMap(location);
+			}
+		};
+		googleMapsLink.setChangeListener(listener);
+		_mainScreen.add(googleMapsLink);
 		
 		displayCredit(credit, location.getLastUpdated());
 	}
@@ -1978,7 +2045,7 @@ public class NwsClient extends UiApplication
 					);
 				}
 			});
-			return temp;
+			return conditions;
 		}
 		
 		try {
@@ -2004,7 +2071,7 @@ public class NwsClient extends UiApplication
 				}
 			});
 		}
-		return temp;
+		return conditions;
 	}
 	
 	/**
@@ -2033,7 +2100,7 @@ public class NwsClient extends UiApplication
 			// Alerts!
 			boolean alert = getDisplayNWSAlerts(location);
 			
-			updateIcon(weather[0], weather[1], alert);
+			updateIcon(location, weather[0], weather[1], alert);
 			
 			// Separate call for the forecast
 			getDisplayNWSForecast(location);

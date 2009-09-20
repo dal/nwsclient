@@ -21,6 +21,12 @@ import net.rim.device.api.system.*;
 import net.rim.device.api.ui.component.*;
 import net.rim.device.api.system.*;
 
+/**
+ * Class that extends LabelField to add an optional "Status" indicator to the 
+ * right edge of the label. This is used by NWSClient to display busy status 
+ * text such as "Getting Weather. . ." or "Getting Location."
+ */
+
 class LabelStatusField extends LabelField implements DrawStyle
 {
 	private String _status;
