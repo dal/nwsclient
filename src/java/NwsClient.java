@@ -890,10 +890,17 @@ public class NwsClient extends UiApplication
 			Dialog.alert("Google Maps is not installed");
 			return;
 		}
+		
+		String address = location.getLocality()+", "+location.getArea();
+		if (location.getArea().equals(""))
+			address = location.getLocality(); 
+		if (!location.getCountry().equals("US"))
+			address = location.getLocality() + ", " + location.getCountry();
+		
 		URLEncodedPostData uepd = new URLEncodedPostData(null, false);
 		uepd.append("action","LOCN");
 		uepd.append("a", "@latlon:"+location.getLat()+","+location.getLon());
-		uepd.append("title", (location.getLocality()+", "+location.getArea()));
+		uepd.append("title", address);
 		uepd.append("description", location.getIcao());
 		String[] args = { "http://gmm/x?"+uepd.toString() };
 		ApplicationDescriptor ad = CodeModuleManager.getApplicationDescriptors(mh)[0];
@@ -1638,8 +1645,8 @@ public class NwsClient extends UiApplication
 			_mainScreen.add(new RichTextField("Error: No NWS Forecast information found."));
 		}
 		
-		// Google Maps link... 
-		LinkField googleMapsLink = new LinkField("Google Map");
+		// Google Maps link
+		LinkField googleMapsLink = new LinkField("Google Map of "+location.getLocality());
 		FieldChangeListener listener = new FieldChangeListener() {
 			public void fieldChanged(Field field, int context) {
 				displayGoogleMap(location);
