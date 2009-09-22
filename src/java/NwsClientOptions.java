@@ -29,6 +29,9 @@ public class NwsClientOptions implements Persistable
 	private boolean _useNws = true;
 	private boolean _autoUpdateIcon = true;
 	private boolean _metric = false;
+	private int _minFontSize = 10;
+	private boolean _changeAppRolloverIcon = true;
+	private boolean _changeAppName = true;
 	
 	public NwsClientOptions()
 	{
@@ -81,6 +84,21 @@ public class NwsClientOptions implements Persistable
 		return _metric;
 	}
 	
+	public int minFontSize()
+	{
+		return _minFontSize;
+	}
+	
+	public boolean changeAppRolloverIcon()
+	{
+		return _changeAppRolloverIcon;
+	}
+	
+	public boolean changeAppName()
+	{
+		return _changeAppName;
+	}
+	
 	public void setUseNws(boolean use)
 	{
 		_useNws = use;
@@ -94,6 +112,21 @@ public class NwsClientOptions implements Persistable
 	public void setMetric(boolean metric)
 	{
 		_metric = metric;
+	}
+	
+	public void setMinFontSize(int size)
+	{
+		_minFontSize = size;
+	}
+	
+	public void setChangeAppRolloverIcon(boolean ci)
+	{
+		_changeAppRolloverIcon = ci;
+	}
+	
+	public void setChangeAppName(boolean cn)
+	{
+		_changeAppName = cn;
 	}
 
 }

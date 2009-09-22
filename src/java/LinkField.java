@@ -18,10 +18,12 @@ package com.renderfast.nwsclient;
 
 import net.rim.device.api.ui.*;
 import net.rim.device.api.system.*;
+import java.util.*;
 
 class LinkField extends Field implements DrawStyle
 {
 	private String _label;
+	private Vector _lines;
 	private Font _font;
 	private int _labelHeight;
 	private int _labelWidth;
@@ -37,6 +39,7 @@ class LinkField extends Field implements DrawStyle
 		_label = label;
 		_font = getFont();
 		_font = _font.derive(Font.UNDERLINED);
+		_lines = new Vector();
 		setFont(_font);
 		_labelHeight = _font.getHeight();
 		_labelWidth = _font.getAdvance(_label);
@@ -59,12 +62,12 @@ class LinkField extends Field implements DrawStyle
 	
 	public int getPreferredWidth() 
 	{
-		return _labelWidth;
+		return _labelWidth + 4;
 	}
 	
 	public int getPreferredHeight() 
 	{
-		return _labelHeight;
+		return _labelHeight + 2;
 	}
 	
 	protected void layout(int width, int height) 
@@ -74,7 +77,36 @@ class LinkField extends Field implements DrawStyle
 		_labelWidth = _font.getAdvance(_label);
 		
 		width = Math.min( width, getPreferredWidth() );
-		height = Math.min( height, getPreferredHeight() );
+		_lines.removeAllElements();
+		if (width < _labelWidth) {
+			StringBuffer thisLine = new StringBuffer();
+			int lastPos = 0;
+			while (lastPos != -1) {
+				int newPos = _label.indexOf(" ", lastPos+1);
+				String part;
+				if (newPos == -1) {
+					part = _label.substring(lastPos);
+				} else {
+					part = _label.substring(lastPos, newPos);
+				}
+				
+				thisLine.append(part);
+				
+				if (_font.getAdvance(thisLine.toString()) > width) {
+					_lines.addElement(thisLine.toString().substring(0, thisLine.length() - part.length()));
+					thisLine.delete(0,thisLine.length());
+				} else if (newPos == -1) {
+					_lines.addElement(thisLine.toString());
+					lastPos = newPos;
+				} else {
+					lastPos = newPos;
+				}
+			}
+			height = _lines.size() * _labelHeight;
+		} else {
+			_lines.addElement(_label);
+			height = Math.min( height, getPreferredHeight() );
+		}
 		
 		setExtent( width, height );
 	}
@@ -82,11 +114,11 @@ class LinkField extends Field implements DrawStyle
 	protected void paint(Graphics graphics) 
 	{
 		int textX, textY, textWidth;
-		int w = getWidth();
-		textX = 4;
-		textY = 2;
-		textWidth = w - 6;
-		graphics.drawText(_label, textX, textY, (int)( getStyle() & DrawStyle.ELLIPSIS | DrawStyle.HALIGN_MASK ), textWidth );
+		for (int i=0; i<_lines.size(); i++) {
+			int offset = _font.getHeight() * i;
+			int w = _font.getAdvance((String)_lines.elementAt(i));
+			graphics.drawText((String)_lines.elementAt(i), 0, offset, (int)( getStyle() | DrawStyle.LEFT | DrawStyle.HALIGN_MASK ), w);
+		}
 	}
 	
 	protected void fieldChangeNotify(int context)  

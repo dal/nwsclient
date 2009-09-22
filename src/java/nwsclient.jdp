@@ -24,14 +24,17 @@ AutoRestart=0
 Description=Retrieve current weather and forecast information from NOAA.
 ExcludeFromBuildAll=0
 [Files
+AbstractScreen.java
 AmbiguousLocationException.java
 BitmapProvider.java
+data\radar_stations.data
 data\weather_stations.data
+data\wfo.data
 HttpHelper.java
 img\icon.png
-img\website_blue.png
+LabelStatusField.java
+LinkField.java
 LocationData.java
-MessageScreen.java
 NotFoundException.java
 NwsClient.java
 nwsclient.rrc
@@ -39,7 +42,10 @@ nwsclient.rrh
 nwsclient_en.rrc
 NwsClientOptions.java
 ParseError.java
+RadarStation.java
+Station.java
 WeatherStation.java
+WfoStation.java
 XmlHelper.java
 ]
 HaveAlxImports=0
@@ -65,4 +71,4 @@ SystemModule=1
 Title=NWSClient
 Type=0
 Vendor=renderfast.com
-Version=1.01
+Version=1.16
