@@ -617,9 +617,13 @@ public class NwsClient extends UiApplication
 		if (!HomeScreen.supportsIcons()) 
 			return;
 		
-		int lOffset = 22; // left offset, two chars long
+		// bigIcon likely to be true on the Blackberry Storm
+		boolean bigIcon = (HomeScreen.getPreferredIconWidth() > 48);
+		
+		int lOffset = (bigIcon) ? 36 : 22; // left offset, two chars long
 		FontFamily fontfam[] = FontFamily.getFontFamilies();
-		Font smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, 12);
+		int smallSize = (bigIcon) ? 18 : 12;
+		Font smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, smallSize);
 		
 		// Strip off anything after a decimal point
 		int decPos = temp.indexOf('.');
@@ -630,29 +634,46 @@ public class NwsClient extends UiApplication
 		
 		if (temp.length() == 1) {
 			// Single digits!
-			lOffset = 25;
+			lOffset = (bigIcon) ? 41 : 25;
 		} else if (temp.length() == 3) { 
 			// move to the left if 3 chars long
-			lOffset = 20;
+			lOffset = (bigIcon) ? 32 : 20;
+			smallSize = (bigIcon) ? 16 : 10;
+			smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, smallSize);
 		} else if (temp.length() > 3) {
 			// Crazy temperature!
 			lOffset = 32;
 			temp = "err";
-			smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, 10);
+			smallSize = (bigIcon) ? 16 : 10;
+			smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, smallSize);
 		}
 		Bitmap bg = Bitmap.getBitmapResource("icon.png");
 		Graphics gfx = new Graphics(bg);
 		if (alert) {
 			gfx.setColor(0xffff33); // yellow text
-			gfx.fillArc(5, 18, 16, 16, 0, 360);
+			if (bigIcon)
+				gfx.fillArc(8, 39, 28, 28, 0, 360);
+			else
+				gfx.fillArc(5, 18, 16, 16, 0, 360);
 			gfx.setColor(0xff3333); // red background
-			gfx.drawArc(6, 19, 14, 14, 0, 360);
+			if (bigIcon)
+				gfx.drawArc(10, 41, 24, 24, 0, 360);
+			else
+				gfx.drawArc(6, 19, 14, 14, 0, 360);
 			Font boldFont = smallFont.derive(Font.BOLD);
 			gfx.setFont(boldFont);
-			gfx.drawText("!", 11, 20); // Exclamation point
+			if (bigIcon) {
+				gfx.drawText("!", 18, 44);
+			} else {
+				gfx.drawText("!", 11, 20); // Exclamation point
+			}
 		}
 		gfx.setFont(smallFont);
-		gfx.drawText(temp, lOffset, 12);
+		if (bigIcon) {
+			gfx.drawText(temp, lOffset, 29);
+		} else {
+			gfx.drawText(temp, lOffset, 12);
+		}
 		HomeScreen.updateIcon(bg, 1);
 		
 		if (options.changeAppName()) { 
