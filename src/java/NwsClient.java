@@ -456,9 +456,8 @@ public class NwsClient extends UiApplication
 	 * This does the work of connecting to the data service and getting updated
 	 * forecasts and current conditions in a separate thread from the UI.
 	 */
-	class WorkerThread extends Thread
+	class WorkerThread implements Runnable
 	{
-		boolean stop_ = false;
 		
 		public void findNewLocation(final String newLocationInput)
 		{
@@ -565,71 +564,6 @@ public class NwsClient extends UiApplication
 						Thread.sleep(4000); // sleep for 4 seconds
 					} catch (InterruptedException e) {
 						continue;
-					}
-					
-					if (start_ && input_ != null) {
-						UiApplication.getUiApplication().invokeLater(new Runnable() {
-							public void run() {
-								final MessageScreen msgScreen = new MessageScreen("Getting location...");
-								pushScreen(msgScreen);
-							}
-						});
-						LocationData newLoc = null;
-						try {
-							newLoc = getLocationData(input_);
-							if (newLoc.getCountry().equals("US")) {
-								// Get the ICAO name of the weather station...
-								findNearestWeatherStation(newLoc);
-							}
-						} catch (AmbiguousLocationException e) {
-							// choose a more specific address?
-							invokeLater(new Runnable() {
-								public void run() {
-									// Remove the getting location message...
-									UiApplication.getUiApplication().popScreen(UiApplication.getUiApplication().getActiveScreen());
-									Dialog.alert("Choose a more specific address");
-								}
-							});
-						} catch (NotFoundException e) {
-							// Couldn't find it at all...
-							invokeLater(new Runnable() {
-								public void run() {
-									UiApplication.getUiApplication().popScreen(UiApplication.getUiApplication().getActiveScreen());
-									Dialog.alert("Could not find location");
-								}
-							});
-						} catch (Exception e) {
-							final String msg = e.getMessage();
-							UiApplication.getUiApplication().invokeLater(new Runnable() {
-								public void run() {
-									// Remove the getting location message...
-									UiApplication.getUiApplication().popScreen(UiApplication.getUiApplication().getActiveScreen());
-									Dialog.alert("Error getting location: "+msg);
-								}
-							});
-						}
-						
-						if (newLoc != null) {
-							
-							UiApplication.getUiApplication().invokeLater(new Runnable() {
-								public void run() {
-									// Remove the getting location message...
-									UiApplication.getUiApplication().popScreen(UiApplication.getUiApplication().getActiveScreen());
-								}
-							});
-							
-							UiApplication.getUiApplication().invokeLater(new Runnable() {
-								public void run() {
-									if (optionsScreen_.isDisplayed())
-										optionsScreen_.close();
-								}
-							});
-							options.setCurrentLocation(newLoc);
-							store.setContents(options);
-							store.commit();
-							refreshWeather();
-						}
-						start_ = false;
 					}
 				}
 			}
@@ -906,12 +840,6 @@ public class NwsClient extends UiApplication
 			
 			_workerThread = new Thread(new WorkerThread());
 			_workerThread.start();
-			
-			this.workerThread_ = this.new WorkerThread();
-			this.workerThread_.start();
-			
-			this.locationFinder_ = this.new LocationFinder();
-			this.locationFinder_.start();
 			
 			// if no location go to the options screen
 			if (options.getCurrentLocation() == null) {
