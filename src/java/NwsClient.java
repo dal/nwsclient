@@ -914,13 +914,7 @@ public class NwsClient extends UiApplication
 			this.locationFinder_.start();
 			
 			// if no location go to the options screen
-<<<<<<< HEAD:src/java/NwsClient.java
-			if (options.getCurrentLocation() != null) {
-				refreshWeather();
-			} else {
-=======
 			if (options.getCurrentLocation() == null) {
->>>>>>> master:src/java/NwsClient.java
 				viewOptions();
 			}
 		}
@@ -955,22 +949,8 @@ public class NwsClient extends UiApplication
 	}
 	
 	private void refreshWeather()
-<<<<<<< HEAD:src/java/NwsClient.java
-	{
-		setLastUpdated(0);
-	}
-	
-	private synchronized void setLastUpdated(long lastUpdated)
-	{
-		// This will effectively notify the Icon Updater thread that we've updated
-		LocationData loc = options.getCurrentLocation();
-		if (loc != null) {
-			loc.setLastUpdated(lastUpdated);
-		}
-=======
 	{
 		this._workerThread.interrupt();
->>>>>>> master:src/java/NwsClient.java
 	}
 	
 	
@@ -1061,14 +1041,6 @@ public class NwsClient extends UiApplication
 		}
 	}
 	
-<<<<<<< HEAD:src/java/NwsClient.java
-	private void setNewLocation(final String userAddress)
-	{
-		locationFinder_.find(userAddress);
-	}
-	
-=======
->>>>>>> master:src/java/NwsClient.java
 	private Calendar parseTime(String timeStr)
 	{
 		// I have to parse the date myself because RIM's SimpleDateFormat doesn't
@@ -1502,11 +1474,7 @@ public class NwsClient extends UiApplication
 		_mainScreen.setTitle(new LabelStatusField(address, LabelField.ELLIPSIS, "status..."));
 		
 		VerticalFieldManager main = new VerticalFieldManager(Manager.USE_ALL_WIDTH);
-<<<<<<< HEAD:src/java/NwsClient.java
-		mainScreen_.add(main);
-=======
 		_mainScreen.add(main);
->>>>>>> master:src/java/NwsClient.java
 		
 		// Current Conditions Label
 		LabelField lbl = new LabelField(_resources.getString(nwsclientResource.CURRENT_CONDITIONS_AT)+
