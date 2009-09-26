@@ -116,7 +116,7 @@ class LinkField extends Field implements DrawStyle
 		int textX, textY, textWidth;
 		for (int i=0; i<_lines.size(); i++) {
 			int offset = _font.getHeight() * i;
-			int w = _font.getAdvance((String)_lines.elementAt(i));
+			int w = _font.getAdvance((String)_lines.elementAt(i))+4;
 			graphics.drawText((String)_lines.elementAt(i), 0, offset, (int)( getStyle() | DrawStyle.LEFT | DrawStyle.HALIGN_MASK ), w);
 		}
 	}

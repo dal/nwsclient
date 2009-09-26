@@ -617,12 +617,16 @@ public class NwsClient extends UiApplication
 		if (!HomeScreen.supportsIcons()) 
 			return;
 		
-		// bigIcon likely to be true on the Blackberry Storm
-		boolean bigIcon = (HomeScreen.getPreferredIconWidth() > 48);
+		int lOffset = 22; // left offset, for temp of two chars length
+		int smallSize = 12;
 		
-		int lOffset = (bigIcon) ? 36 : 22; // left offset, two chars long
+		// bigIcon likely to be true on the Blackberry Storm (72px vs. 48px)
+		boolean bigIcon = false; //(HomeScreen.getPreferredIconWidth() > 50);
+		if (bigIcon) { 
+			lOffset = 36;
+			smallSize = 18;
+		}
 		FontFamily fontfam[] = FontFamily.getFontFamilies();
-		int smallSize = (bigIcon) ? 18 : 12;
 		Font smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, smallSize);
 		
 		// Strip off anything after a decimal point
@@ -632,6 +636,7 @@ public class NwsClient extends UiApplication
 			temp = temp.substring(0, decPos);
 		}
 		
+		int yPos = (bigIcon) ? 29 : 12;
 		if (temp.length() == 1) {
 			// Single digits!
 			lOffset = (bigIcon) ? 41 : 25;
@@ -669,11 +674,7 @@ public class NwsClient extends UiApplication
 			}
 		}
 		gfx.setFont(smallFont);
-		if (bigIcon) {
-			gfx.drawText(temp, lOffset, 29);
-		} else {
-			gfx.drawText(temp, lOffset, 12);
-		}
+		gfx.drawText(temp, lOffset, yPos);
 		HomeScreen.updateIcon(bg, 1);
 		
 		if (options.changeAppName()) { 
