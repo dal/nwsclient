@@ -24,9 +24,6 @@ class LinkField extends Field implements DrawStyle
 {
 	private String _label;
 	private Vector _lines;
-	private Font _font;
-	private int _labelHeight;
-	private int _labelWidth;
 	
 	public LinkField(String label) 
 	{
@@ -37,12 +34,7 @@ class LinkField extends Field implements DrawStyle
 	{
 		super(style);
 		_label = label;
-		_font = getFont();
-		_font = _font.derive(Font.UNDERLINED);
 		_lines = new Vector();
-		setFont(_font);
-		_labelHeight = _font.getHeight();
-		_labelWidth = _font.getAdvance(_label);
 	}
 	
 	public String getLabel() 
@@ -62,19 +54,21 @@ class LinkField extends Field implements DrawStyle
 	
 	public int getPreferredWidth() 
 	{
-		return _labelWidth + 4;
+		Font _font = getFont();
+		return _font.getAdvance(_label) + 4;
 	}
 	
 	public int getPreferredHeight() 
 	{
-		return _labelHeight + 2;
+		Font _font = getFont();
+		return _font.getHeight() + 2;
 	}
 	
 	protected void layout(int width, int height) 
 	{
-		_font = getFont();
-		_labelHeight = _font.getHeight();
-		_labelWidth = _font.getAdvance(_label);
+		Font _font = getFont();
+		int _labelHeight = _font.getHeight();
+		int _labelWidth = _font.getAdvance(_label);
 		
 		width = Math.min( width, getPreferredWidth() );
 		_lines.removeAllElements();
@@ -114,6 +108,10 @@ class LinkField extends Field implements DrawStyle
 	protected void paint(Graphics graphics) 
 	{
 		int textX, textY, textWidth;
+		Font _font = getFont();
+		_font = _font.derive(Font.UNDERLINED);
+		setFont(_font);
+		
 		for (int i=0; i<_lines.size(); i++) {
 			int offset = _font.getHeight() * i;
 			int w = _font.getAdvance((String)_lines.elementAt(i))+4;
