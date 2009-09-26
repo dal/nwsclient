@@ -626,8 +626,9 @@ public class NwsClient extends UiApplication
 		int lOffset = 22; // left offset, for temp of two chars length
 		int smallSize = 12;
 		
+		Bitmap bg = Bitmap.getBitmapResource("icon.png");
 		// bigIcon likely to be true on the Blackberry Storm (72px vs. 48px)
-		boolean bigIcon = false; 
+		boolean bigIcon = (bg.getWidth() > 48); 
 		if (bigIcon) { 
 			lOffset = 36;
 			smallSize = 18;
@@ -658,7 +659,7 @@ public class NwsClient extends UiApplication
 			smallSize = (bigIcon) ? 16 : 10;
 			smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, smallSize);
 		}
-		Bitmap bg = Bitmap.getBitmapResource("icon.png");
+		
 		Graphics gfx = new Graphics(bg);
 		if (alert != "") {
 			gfx.setColor(0xffff33); // yellow text
