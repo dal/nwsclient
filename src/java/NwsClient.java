@@ -224,7 +224,7 @@ public class NwsClient extends UiApplication
 				"iGoogle weather data will be used.";
 			
 			RichTextField _helpLabel = new RichTextField(helpText, Field.NON_FOCUSABLE);
-			Font small = _helpLabel.getFont().derive(Font.PLAIN, 11);
+			Font small = _helpLabel.getFont().derive(Font.PLAIN, options.minFontSize());
 			_helpLabel.setFont(small);
 			add(_helpLabel);
 			
@@ -374,13 +374,19 @@ public class NwsClient extends UiApplication
 			// Get the current temperature
 			try {
 				Hashtable conditions = getParseCurrentConditions(location_);
+				
 				Vector alerts = getAlerts(location_);
-				boolean alert = (alerts.size() > 0);
+				String alertStr = "";
+				if (alerts.size() > 0) {
+					Observation alert = (Observation)alerts.elementAt(0);
+					alertStr = alert.value;
+				}
+				
 				if (conditions != null && conditions.containsKey("temperature")) {
 					String temp = (String)conditions.get("temperature");
 					String cond = (String)conditions.get("condition");
 					
-					updateIcon(location_, temp, cond, alert);
+					updateIcon(location_, temp, cond, alertStr);
 					
 					if (options.changeAppRolloverIcon()) {
 						String rolloverIconUrl = (String)conditions.get("icon_url");
@@ -612,17 +618,22 @@ public class NwsClient extends UiApplication
 	}
 	
 	public static synchronized void updateIcon(final LocationData loc, 
-								String temp, String condition, boolean alert)
+								String temp, String condition, String alert)
 	{
 		if (!HomeScreen.supportsIcons()) 
 			return;
 		
-		// bigIcon likely to be true on the Blackberry Storm
-		boolean bigIcon = (HomeScreen.getPreferredIconWidth() > 48);
+		int lOffset = 22; // left offset, for temp of two chars length
+		int smallSize = 12;
 		
-		int lOffset = (bigIcon) ? 36 : 22; // left offset, two chars long
+		Bitmap bg = Bitmap.getBitmapResource("icon.png");
+		// bigIcon likely to be true on the Blackberry Storm (72px vs. 48px)
+		boolean bigIcon = (bg.getWidth() > 48); 
+		if (bigIcon) { 
+			lOffset = 36;
+			smallSize = 18;
+		}
 		FontFamily fontfam[] = FontFamily.getFontFamilies();
-		int smallSize = (bigIcon) ? 18 : 12;
 		Font smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, smallSize);
 		
 		// Strip off anything after a decimal point
@@ -632,6 +643,7 @@ public class NwsClient extends UiApplication
 			temp = temp.substring(0, decPos);
 		}
 		
+		int yPos = (bigIcon) ? 29 : 12;
 		if (temp.length() == 1) {
 			// Single digits!
 			lOffset = (bigIcon) ? 41 : 25;
@@ -647,9 +659,9 @@ public class NwsClient extends UiApplication
 			smallSize = (bigIcon) ? 16 : 10;
 			smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, smallSize);
 		}
-		Bitmap bg = Bitmap.getBitmapResource("icon.png");
+		
 		Graphics gfx = new Graphics(bg);
-		if (alert) {
+		if (alert != "") {
 			gfx.setColor(0xffff33); // yellow text
 			if (bigIcon)
 				gfx.fillArc(8, 39, 28, 28, 0, 360);
@@ -669,17 +681,18 @@ public class NwsClient extends UiApplication
 			}
 		}
 		gfx.setFont(smallFont);
-		if (bigIcon) {
-			gfx.drawText(temp, lOffset, 29);
-		} else {
-			gfx.drawText(temp, lOffset, 12);
-		}
+		gfx.drawText(temp, lOffset, yPos);
 		HomeScreen.updateIcon(bg, 1);
 		
 		if (options.changeAppName()) { 
 			// App name is the temperature, current condition string
 			String tempType = (options.metric()) ? "C, " : "\u00b0F, ";
-			String appName = (loc.getLocality() + ": " + temp + tempType + condition);
+			String appName;
+			if (alert != "") {
+				appName = loc.getLocality() + ": " + alert;
+			} else {
+				appName = loc.getLocality() + ": " + temp + tempType + condition;
+			}
 			HomeScreen.setName(appName, 1);
 		} else {
 			HomeScreen.setName("NWSClient", 1);
@@ -902,7 +915,7 @@ public class NwsClient extends UiApplication
 		return true;
 	}
 	
-	private void displayGoogleMap(final LocationData location)
+	private void displayGoogleMap(String address, double lat, double lon)
 	{
 		/* from http://www.blackberryforums.com/developer-forum/143263-heres-how-start-google-maps-landmark.html */
 		
@@ -912,17 +925,10 @@ public class NwsClient extends UiApplication
 			return;
 		}
 		
-		String address = location.getLocality()+", "+location.getArea();
-		if (location.getArea().equals(""))
-			address = location.getLocality(); 
-		if (!location.getCountry().equals("US"))
-			address = location.getLocality() + ", " + location.getCountry();
-		
 		URLEncodedPostData uepd = new URLEncodedPostData(null, false);
 		uepd.append("action","LOCN");
-		uepd.append("a", "@latlon:"+location.getLat()+","+location.getLon());
+		uepd.append("a", "@latlon:"+lat+","+lon);
 		uepd.append("title", address);
-		uepd.append("description", location.getIcao());
 		String[] args = { "http://gmm/x?"+uepd.toString() };
 		ApplicationDescriptor ad = CodeModuleManager.getApplicationDescriptors(mh)[0];
 		ApplicationDescriptor ad2 = new ApplicationDescriptor(ad, args);
@@ -1514,7 +1520,7 @@ public class NwsClient extends UiApplication
 			return;
 		} else if (weather.containsKey("temperature") && (weather.containsKey("condition"))) {
 			updateIcon(location, (String)weather.get("temperature"), 
-									(String)weather.get("condition"), false);
+									(String)weather.get("condition"), "");
 		}
 		
 		//String address = (String)weather.get("city");
@@ -1529,7 +1535,7 @@ public class NwsClient extends UiApplication
 		
 		// Grab some fonts...
 		FontFamily fontfam[] = FontFamily.getFontFamilies();
-		Font smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, 12);
+		Font smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, options.minFontSize()+2);
 		Font tinyFont = smallFont.derive(Font.PLAIN, options.minFontSize());
 
 		// Make the title label
@@ -1670,11 +1676,30 @@ public class NwsClient extends UiApplication
 		LinkField googleMapsLink = new LinkField("Google Map of "+location.getLocality());
 		FieldChangeListener listener = new FieldChangeListener() {
 			public void fieldChanged(Field field, int context) {
-				displayGoogleMap(location);
+				String address = location.getLocality()+", "+location.getArea();
+				if (location.getArea().equals(""))
+					address = location.getLocality(); 
+				if (!location.getCountry().equals("US"))
+					address = location.getLocality() + ", " + location.getCountry();
+				displayGoogleMap(address, location.getLat(), location.getLon());
 			}
 		};
 		googleMapsLink.setChangeListener(listener);
 		_mainScreen.add(googleMapsLink);
+		
+		if (location.getIcao() != "") {
+			LinkField icaoGoogleMapsLink = new LinkField("Google Map of "+location.getIcao());
+			FieldChangeListener ilistener = new FieldChangeListener() {
+				public void fieldChanged(Field field, int context) {
+					displayGoogleMap(location.getIcao(), 
+						Math.toDegrees(location.getIcaoLat()), 
+						Math.toDegrees(location.getIcaoLon())
+						);
+				}
+			};
+			icaoGoogleMapsLink.setChangeListener(ilistener);
+			_mainScreen.add(icaoGoogleMapsLink);
+		}
 		
 		displayCredit(credit, location.getLastUpdated());
 	}
@@ -1962,16 +1987,20 @@ public class NwsClient extends UiApplication
 		return new Vector();
 	}
 	
-	private boolean getDisplayNWSAlerts(final LocationData location)
+	private String getDisplayNWSAlerts(final LocationData location)
 	{
-		boolean alert = false;
+		String alertStr = "";
 		synchronized(UiApplication.getEventLock()) {
 			_mainScreen.setStatusText(_resources.getString(nwsclientResource.GETTING_ALERTS));
 			_mainScreen.setStatusVisible(true);
 		}
 		try {
 			final Vector alerts = getAlerts(location);
-			alert = (alerts.size() > 0);
+			if (alerts.size() > 0) {
+				// return the first alert
+				Observation alert = (Observation)alerts.elementAt(0);
+				alertStr = alert.value;
+			}
 			
 			UiApplication.getUiApplication().invokeLater(new Runnable() {
 				public void run()
@@ -1990,7 +2019,7 @@ public class NwsClient extends UiApplication
 				}
 			});
 		}
-		return alert;
+		return alertStr;
 	}
 	
 	/**
@@ -2126,7 +2155,7 @@ public class NwsClient extends UiApplication
 			String weather[] = getDisplayNWSCurrentConditions(location);
 			
 			// Alerts!
-			boolean alert = getDisplayNWSAlerts(location);
+			String alert = getDisplayNWSAlerts(location);
 			
 			updateIcon(location, weather[0], weather[1], alert);
 			
