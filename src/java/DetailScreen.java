@@ -21,7 +21,7 @@ public class DetailScreen extends MainScreen
 		super();
 		
 		DateFormat dayFormat = new SimpleDateFormat("E"); // day of week
-		DateFormat timeFormat = new SimpleDateFormat("Ha"); // 8pm
+		DateFormat timeFormat = new SimpleDateFormat("ha"); // 8pm
 		
 		int desiredDate = when.get(Calendar.DATE); // day of month
 		Date now = when.getTime();

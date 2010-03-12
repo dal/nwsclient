@@ -1,4 +1,6 @@
+// :noTabs=false:tabSize=4:
 /**
+ * 
  * Copyright (c) 2009 Doug Letterman
  *
  * This program is free software: you can redistribute it and/or modify
@@ -83,6 +85,8 @@ public class NwsClient extends UiApplication
 	
 	private EditField _newLocField;
 	
+	private Hashtable _forecastDetail;
+	
 	private static ResourceBundle _resources = ResourceBundle.getBundle(nwsclientResource.BUNDLE_ID, nwsclientResource.BUNDLE_NAME);
 	
 	private boolean _foreground = false;
@@ -104,7 +108,7 @@ public class NwsClient extends UiApplication
 	 * start time out to a given time interval. This class is a simple struct
 	 * for storing those time keys.
 	 */
-	private static class TimeKey
+	public static class TimeKey
 	{
 		public Calendar startTime;
 		public String periodName;
@@ -114,12 +118,23 @@ public class NwsClient extends UiApplication
 	 * Class for storing weather observations. Each has the type of observation,
 	 * the time interval, the value, and the relevant units (i.e. 'Celsius').
 	 */
-	private static class Observation
+	public static class Observation
 	{
 		public TimeKey time;
 		public String value;
 		public String units;
 		public String url;
+	};
+	
+	public static class ObservationGroup
+	{
+		public String type;
+		public Vector samples;
+		
+		public ObservationGroup() {
+			samples = new Vector();
+		}
+		
 	};
 	
 	/**
@@ -382,18 +397,18 @@ public class NwsClient extends UiApplication
 					alertStr = alert.value;
 				}
 				
-				if (conditions != null && conditions.containsKey("temperature")) {
-					String temp = (String)conditions.get("temperature");
-					String cond = (String)conditions.get("condition");
+				if (conditions != null) {
+					String temp = "?";
+					String cond = "";
+					String rolloverIconUrl = "";
+					if (conditions.containsKey("temperature"))
+						temp = (String)conditions.get("temperature");
+					if (conditions.containsKey("condition"))
+						cond = (String)conditions.get("condition");
+					if (conditions.containsKey("icon_url"))
+						rolloverIconUrl = (String)conditions.get("icon_url");
 					
-					updateIcon(location_, temp, cond, alertStr);
-					
-					if (options.changeAppRolloverIcon()) {
-						String rolloverIconUrl = (String)conditions.get("icon_url");
-						// get the rollover icon
-						final EncodedImage img = _bitmapProvider.fetchBitmap(rolloverIconUrl);
-						_bitmapProvider.setRolloverIcon(img);
-					}
+					updateIcon(location_, temp, cond, rolloverIconUrl, alertStr);
 					
 				} else {
 					System.err.println("Error getting icon current conditions: null current conditions");
@@ -483,7 +498,6 @@ public class NwsClient extends UiApplication
 				invokeLater(new Runnable() {
 					public void run() {
 						// Remove the getting location message...
-						_mainScreen.setStatusVisible(false);
 						Dialog.alert("Choose a more specific address");
 					}
 				});
@@ -491,7 +505,6 @@ public class NwsClient extends UiApplication
 				// Couldn't find it at all...
 				invokeLater(new Runnable() {
 					public void run() {
-						_mainScreen.setStatusVisible(false);
 						Dialog.alert("Could not find location");
 					}
 				});
@@ -500,10 +513,11 @@ public class NwsClient extends UiApplication
 				UiApplication.getUiApplication().invokeLater(new Runnable() {
 					public void run() {
 						// Remove the getting location message...
-						_mainScreen.setStatusVisible(false);
 						Dialog.alert("Error getting location: "+msg);
 					}
 				});
+			} finally {
+				_mainScreen.setStatusVisible(false);
 			}
 			
 			if (newLoc != null) {
@@ -615,95 +629,6 @@ public class NwsClient extends UiApplication
 			}
 			options = (NwsClientOptions)store.getContents();
 		}
-	}
-	
-	public static synchronized void updateIcon(final LocationData loc, 
-								String temp, String condition, String alert)
-	{
-		if (!HomeScreen.supportsIcons()) 
-			return;
-		
-		int lOffset = 22; // left offset, for temp of two chars length
-		int smallSize = 12;
-		
-		Bitmap bg = Bitmap.getBitmapResource("icon.png");
-		// bigIcon likely to be true on the Blackberry Storm (72px vs. 48px)
-		boolean bigIcon = (bg.getWidth() > 48); 
-		if (bigIcon) { 
-			lOffset = 36;
-			smallSize = 18;
-		}
-		FontFamily fontfam[] = FontFamily.getFontFamilies();
-		Font smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, smallSize);
-		
-		// Strip off anything after a decimal point
-		int decPos = temp.indexOf('.');
-		if (decPos != -1) {
-			// We've got a decimal point, get rid of it
-			temp = temp.substring(0, decPos);
-		}
-		
-		int yPos = (bigIcon) ? 29 : 12;
-		if (temp.length() == 1) {
-			// Single digits!
-			lOffset = (bigIcon) ? 41 : 25;
-		} else if (temp.length() == 3) { 
-			// move to the left if 3 chars long
-			lOffset = (bigIcon) ? 32 : 20;
-			smallSize = (bigIcon) ? 16 : 10;
-			smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, smallSize);
-		} else if (temp.length() > 3) {
-			// Crazy temperature!
-			lOffset = 32;
-			temp = "err";
-			smallSize = (bigIcon) ? 16 : 10;
-			smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, smallSize);
-		}
-		
-		Graphics gfx = new Graphics(bg);
-		if (alert != "") {
-			gfx.setColor(0xffff33); // yellow text
-			if (bigIcon)
-				gfx.fillArc(8, 39, 28, 28, 0, 360);
-			else
-				gfx.fillArc(5, 18, 16, 16, 0, 360);
-			gfx.setColor(0xff3333); // red background
-			if (bigIcon)
-				gfx.drawArc(10, 41, 24, 24, 0, 360);
-			else
-				gfx.drawArc(6, 19, 14, 14, 0, 360);
-			Font boldFont = smallFont.derive(Font.BOLD);
-			gfx.setFont(boldFont);
-			if (bigIcon) {
-				gfx.drawText("!", 18, 44);
-			} else {
-				gfx.drawText("!", 11, 20); // Exclamation point
-			}
-		}
-		gfx.setFont(smallFont);
-		gfx.drawText(temp, lOffset, yPos);
-		HomeScreen.updateIcon(bg, 1);
-		
-		if (options.changeAppName()) { 
-			// App name is the temperature, current condition string
-			String tempType = (options.metric()) ? "C, " : "\u00b0F, ";
-			String appName;
-			if (alert != "") {
-				appName = loc.getLocality() + ": " + alert;
-			} else {
-				appName = loc.getLocality() + ": " + temp + tempType + condition;
-			}
-			HomeScreen.setName(appName, 1);
-		} else {
-			HomeScreen.setName("NWSClient", 1);
-		}
-		
-		if (!options.changeAppRolloverIcon()) {
-			// If we're not changing the rollover icon make
-			// sure the rollover is the same as the regular icon
-			HomeScreen.setRolloverIcon(bg, 1);
-		}
-		
 	}
 	
 	/* Class methods */
@@ -1031,7 +956,7 @@ public class NwsClient extends UiApplication
 						if (child.getTagName().equals("start-valid-time")) {
 							TimeKey myTime = new TimeKey();
 							myTime.startTime = parseTime(XmlHelper.getNodeText(child)); // Convert time string to timestamp
-							myTime.periodName = null;
+							myTime.periodName = "";
 							// Look for the string name of this time period, e.g. "Thursday"
 							if (child.hasAttribute("period-name")) {
 								myTime.periodName = child.getAttribute("period-name");	
@@ -1058,29 +983,37 @@ public class NwsClient extends UiApplication
 		// Google weather forecast so we can display them the same way
 		
 		Vector fc = new Vector();
-		Vector conditions = new Vector();
-		// Roll up the NDFD into a hash of days
+		ObservationGroup conditions = new ObservationGroup();
+		// Unroll the NDFD into a hash of days
 		if (weather.containsKey("weather")) {
 			Hashtable types = (Hashtable)weather.get("weather");
 			if (types.containsKey("weather-conditions")) {
-				conditions = (Vector)types.get("weather-conditions");
+				conditions = (ObservationGroup)types.get("weather-conditions"); 
 			}
 		}
 		
-		for (int i = 0; i < conditions.size(); i++) {
+		for (int i = 0; i < conditions.samples.size(); i++) {
 			Hashtable day = new Hashtable();
-			Observation myCond = (Observation)conditions.elementAt(i);
+			Observation myCond = (Observation)conditions.samples.elementAt(i);
 			String temp = "";
-			Observation tempObs;
+			String timeStr = "";
+			Observation tempObs = null;
+			Calendar time = null;
+			/* Grab the temperature observation
+			 * there is only one of these for every two conditions nodes
+			 */
 			if (myCond.time.startTime.get(Calendar.HOUR_OF_DAY) < 18) {
-				// Day!
+				// Day! - these are usually timestamped 6am
 				tempObs = getObservationByIndex(weather, "temperature", "maximum", i/2);
+				timeStr = "day";
 			} else {
-				// Night!
+				// Night! - usually timestamped 6pm
 				tempObs = getObservationByIndex(weather, "temperature", "minimum", i/2);
+				timeStr = "night";
 			}
 			
 			if (tempObs != null) {
+				time = tempObs.time.startTime;
 				if (options.metric() && tempObs.units.equals("Fahrenheit")) {
 					temp = fahrenheitToCelsius(Integer.valueOf(tempObs.value).intValue()) + " C";
 				} else {
@@ -1097,6 +1030,13 @@ public class NwsClient extends UiApplication
 			day.put("day_of_week", myCond.time.periodName); // e.g. "Thursday" or "Thanksgiving Day"
 			day.put("temperature", temp);
 			day.put("condition", myCond.value);
+			
+			/* Put the calendar time in for the forecast detail link
+			 * Google forecast data won't have these keys
+			 */
+			day.put("timeStr", timeStr);
+			day.put("time", tempObs.time.startTime);
+			
 			if (iconUrl != null)
 				day.put("icon_url", iconUrl.value);
 			if (popObs != null)
@@ -1105,6 +1045,39 @@ public class NwsClient extends UiApplication
 			fc.addElement(day);
 		}
 		return fc;
+	}
+	
+	/**
+	 * When supplied with an NDFD root node, returns a vector of all the  
+	 * observation types available (i.e. "temperature," "humidity," etc . . .) 
+	 */
+	private String[] getNDFDObservationTypes(Element root)
+	{
+		Vector collectedTypes = new Vector();
+		NodeList paramNodes = root.getElementsByTagName("parameters");
+		int numParamNodes = paramNodes.getLength();
+		for (int i=0; i < numParamNodes; i++) {
+			Node tmpNode = paramNodes.item(i);
+			if (tmpNode.getNodeType() != Node.ELEMENT_NODE)
+				continue;
+			Element paramEl = (Element)tmpNode;
+			NodeList obsNodes = paramEl.getChildNodes();
+			int numObsNodes = obsNodes.getLength();
+			for (int j=0; j < numObsNodes; j++) {
+				tmpNode = obsNodes.item(j);
+				if (tmpNode.getNodeType() != Node.ELEMENT_NODE)
+					continue;
+				Element obsChild = (Element)tmpNode;
+				String tagName = obsChild.getTagName();
+				if (!collectedTypes.contains(tagName))
+					collectedTypes.addElement(tagName);
+			}
+		}
+		int numTypes = collectedTypes.size();
+		String[] types = new String[numTypes];
+		for (int i = 0; i < numTypes; i++)
+			types[i] = (String)collectedTypes.elementAt(i);
+		return types;
 	}
 
 	/**
@@ -1117,11 +1090,7 @@ public class NwsClient extends UiApplication
 		/*
 		fc = Hashtable(	 
 			'obsName' => Hashtable( 
-				'obsType' => Array(
-						Observation,
-						Observation,
-						. . .
-								)
+				'obsType' => ObservationGroup {  String type, Array samples }
 			)
 		 )
 		*/
@@ -1129,12 +1098,15 @@ public class NwsClient extends UiApplication
 		// build up our hash of hashes
 		Hashtable fc = new Hashtable();
 		
+		final String[] weatherSubAttrs = { "coverage", "intensity", "weather-type", "qualifier" };
+		
 		for (int h=0; h < observations.length; h++) {
 			String obsName = observations[h];
+			System.err.println("Getting observation "+obsName);
 			
 			NodeList obsNodes = root.getElementsByTagName(obsName);
 			
-			Hashtable obsTypes = new Hashtable();
+			Hashtable obsTypes = new Hashtable(); 
 			
 			for (int i=0; i < obsNodes.getLength(); i++) {
 				Element obs = (Element)obsNodes.item(i);
@@ -1146,7 +1118,8 @@ public class NwsClient extends UiApplication
 					}
 					Vector obsTimes = (Vector)times.get(timeLayout);
 					
-					String obsType = "";
+					// get the name
+					String obsType = obsName;
 					if (obs.hasAttribute("type")) {
 						obsType = obs.getAttribute("type");
 					} else if (obsName.equals("weather")) { 
@@ -1155,16 +1128,17 @@ public class NwsClient extends UiApplication
 						obsType = "hazard-conditions";
 					}
 					
+					// get the units
 					String obsUnits = "";
 					if (obs.hasAttribute("units"))
 						obsUnits = obs.getAttribute("units");
 						
-					Vector myObservations;
+					ObservationGroup myObservations;
 					if (obsTypes.containsKey(obsType)) {
-						myObservations = (Vector)obsTypes.get(obsType);
+						myObservations = (ObservationGroup)obsTypes.get(obsType);
 					} else {
-						myObservations = new Vector();
-						obsTypes.put(obsType, observations);
+						myObservations = new ObservationGroup();
+						obsTypes.put(obsType, myObservations);
 					}
 					
 					NodeList typeObsNodes = obs.getChildNodes();
@@ -1179,11 +1153,19 @@ public class NwsClient extends UiApplication
 							theObs.units = obsUnits;
 							
 							Element obsChild = (Element)tmpNode;
+							System.err.println("  obsChild: "+obsChild.getTagName());
 							// Watch for nil values and skip them...
 							String nil = obsChild.getAttribute("xsi:nil");
 							if (nil.equals("true")) {
 								counter++;
 								continue;
+							}
+							
+							/* The first node is usually the textual name of the
+							 * observation, e.g. 'Relative Humidity'
+							 */
+							if (obsChild.getTagName().equals("name")) {
+								myObservations.type = XmlHelper.getNodeText(obsChild);
 							}
 							
 							if (obsChild.getTagName().equals("value")) {
@@ -1193,7 +1175,7 @@ public class NwsClient extends UiApplication
 									continue;
 								}
 								theObs.value = XmlHelper.getNodeText(obsChild);
-								myObservations.addElement(theObs);
+								myObservations.samples.addElement(theObs);
 								counter++;
 							} else if (obsChild.getTagName().equals("icon-link")) {
 								// It's an icon!
@@ -1203,7 +1185,7 @@ public class NwsClient extends UiApplication
 									continue;
 								}
 								theObs.value = XmlHelper.getNodeText(obsChild);
-								myObservations.addElement(theObs);
+								myObservations.samples.addElement(theObs);
 								counter++;
 							} else if (obsChild.getTagName().equals("hazard-conditions")) {
 								// Hazards/warnings are a weird case
@@ -1218,7 +1200,7 @@ public class NwsClient extends UiApplication
 									Element myHazardEl = (Element)myHazards.item(0);
 									theObs.value = myHazardEl.getAttribute("phenomena");
 									theObs.units = myHazardEl.getAttribute("significance");
-									myObservations.addElement(theObs);
+									myObservations.samples.addElement(theObs);
 									// try to get the url
 									NodeList myUrls = myHazardEl.getElementsByTagName("hazardTextURL");
 									if (myUrls.getLength() > 0) {
@@ -1226,20 +1208,37 @@ public class NwsClient extends UiApplication
 									}
 								}
 								counter++;
-							} else if (obsChild.getTagName().equals(obsType)) {
-								// It's a condition -- i.e. "Partly Cloudy"
+							} else if (obsChild.getTagName().equals("weather-conditions")) {
+								// weather conditions for the forecast detail
 								if (counter >= obsTimes.size()) {
 									// we've run out of times...
 									System.err.println("Not enough times for "+obsType);
 									continue;
 								}
-								theObs.value = obsChild.getAttribute("weather-summary");
-								myObservations.addElement(theObs);
+								
+								if (obsChild.hasAttribute("weather-summary")) {
+									// It's a by-day summary condition -- i.e. "Partly Cloudy"
+									theObs.value = obsChild.getAttribute("weather-summary");
+									myObservations.samples.addElement(theObs);
+								} else {
+									// It's a more complicated XML forecast element
+									NodeList weatherNodes = obsChild.getElementsByTagName("value"); 
+									if (weatherNodes.getLength() > 0) {
+										StringBuffer weatherVal = new StringBuffer();
+										Element weatherValueNode = (Element)weatherNodes.item(0);
+										for (int k=0; k < weatherSubAttrs.length; k++) {
+											if (weatherValueNode.hasAttribute(weatherSubAttrs[k])) {
+												weatherVal.append(weatherValueNode.getAttribute(weatherSubAttrs[k]));
+												weatherVal.append(" ");
+											}
+										}
+										theObs.value = weatherVal.toString();
+										myObservations.samples.addElement(theObs);
+									}
+								}
 								counter++;
-							} 
+							}
 						}
-						// Add our list of observations to the hashtable
-						obsTypes.put(obsType, myObservations);
 					}
 				}
 			}
@@ -1286,8 +1285,11 @@ public class NwsClient extends UiApplication
 			// "visibility" 
 			cc.put("visibility", XmlHelper.getValueIfExists(root, "visibility_mi"));
 			
-			String iconUrl = XmlHelper.getValue(root, "icon_url_base") +
-								XmlHelper.getValue(root, "icon_url_name");
+			String iconUrl = "";
+			String iconUrlBase = XmlHelper.getValueIfExists(root, "icon_url_base");
+			String iconUrlName = XmlHelper.getValueIfExists(root, "icon_url_name");
+			if (iconUrlBase != "" && iconUrlName != "")
+				iconUrl = iconUrlBase + iconUrlName;
 			cc.put("icon_url", iconUrl);
 		} catch (ParseError pe) {
 			throw new ParseError(pe.toString());
@@ -1308,7 +1310,7 @@ public class NwsClient extends UiApplication
 	 * @param observations An array of observation names to fetch
 	 * @return A hashtable of forecast observations indexed by time
 	 */
-	private Hashtable parseNDFD(InputStream is, final String[] observations) 
+	private Hashtable parseNDFD(InputStream is, String[] observations) 
 	{
 		Hashtable fc = new Hashtable();
 		
@@ -1318,6 +1320,11 @@ public class NwsClient extends UiApplication
 			Document document = builder.parse(is);
 				
 			Element root = document.getDocumentElement();
+			
+			/* If no observations specified, get them all */
+			if (observations.length == 0) {
+				observations = getNDFDObservationTypes(root);
+			}
 			
 			// Parse the times legend 
 			Hashtable times = getNDFDTimeSeries(document);
@@ -1336,14 +1343,15 @@ public class NwsClient extends UiApplication
 		return fc;
 	}
 	
-	private Observation getObservationByIndex(Hashtable weather, String obsName, String type, int index) 
+	private Observation getObservationByIndex(Hashtable weather, String obsName, 
+											  String type, int index) 
 	{
 		if (weather.containsKey(obsName)) {
 			Hashtable types = (Hashtable)weather.get(obsName);
 			if (types.containsKey(type)) {
-				Vector observations = (Vector)types.get(type);
-				if (index < observations.size()) {
-					Observation obs = (Observation)observations.elementAt(index);
+				ObservationGroup grp = (ObservationGroup)types.get(type);
+				if (index < grp.samples.size()) {
+					Observation obs = (Observation)grp.samples.elementAt(index);
 					return obs;
 				}
 			}
@@ -1518,20 +1526,30 @@ public class NwsClient extends UiApplication
 		if (weather == null) {
 			_mainScreen.add(new LabelField("Unable to fetch current conditions"));
 			return;
-		} else if (weather.containsKey("temperature") && (weather.containsKey("condition"))) {
-			updateIcon(location, (String)weather.get("temperature"), 
-									(String)weather.get("condition"), "");
 		}
 		
-		//String address = (String)weather.get("city");
 		String address = location.getLocality()+", "+location.getCountry();
+		String conditionsLabel = "Unknown conditions";
+		String temp = "";
+		String condIconUrl = "";
+		String humidity = "";
+		String station = "";
+		String wind = "";
 		
-		String conditionsLabel = (String)weather.get("condition");
-		String temp = (String)weather.get("temperature");
-		String humidity = (String)weather.get("relative_humidity");
-		String station = (String)weather.get("location");
-		String condIconUrl = (String)weather.get("icon_url");
-		String wind = (String)weather.get("wind");
+		if (weather.containsKey("condition"))
+			conditionsLabel = (String)weather.get("condition");
+		if (weather.containsKey("temperature"))
+			temp = (String)weather.get("temperature");
+		if (weather.containsKey("icon_url"))
+			condIconUrl = (String)weather.get("icon_url");
+		if (weather.containsKey("relative_humidity"))
+			humidity = (String)weather.get("relative_humidity");
+		if (weather.containsKey("location"))
+			station = (String)weather.get("location");
+		if (weather.containsKey("wind"))
+			wind = (String)weather.get("wind");
+		
+		updateIcon(location, temp, conditionsLabel, condIconUrl, "");
 		
 		// Grab some fonts...
 		FontFamily fontfam[] = FontFamily.getFontFamilies();
@@ -1666,6 +1684,23 @@ public class NwsClient extends UiApplication
 			if (precip != null)
 				rightCol.add(new RichTextField(precip));
 			_mainScreen.add(new SeparatorField());
+			
+			if (day.containsKey("time") && day.containsKey("timeStr")) {
+				final Calendar timestamp = (Calendar)day.get("time");
+				String dayOrNight = (String)day.get("timeStr");
+				if (dayOrNight.equals("day")) {
+					// Show the link to the forecast detail
+					LinkField detailLink = new LinkField("detail");
+					FieldChangeListener listener = new FieldChangeListener() {
+						public void fieldChanged(Field field, int context) {
+							displayForecastDetail(_forecastDetail, timestamp);
+						}
+					};
+					detailLink.setChangeListener(listener);
+					rightCol.add(detailLink);
+				}
+			}
+			
 		}
 		
 		if (forecast.size() == 0) {
@@ -1702,6 +1737,12 @@ public class NwsClient extends UiApplication
 		}
 		
 		displayCredit(credit, location.getLastUpdated());
+	}
+	
+	private void displayForecastDetail(final Hashtable forecastDetail, final Calendar when)
+	{
+		DetailScreen scrn = new DetailScreen(forecastDetail, when);
+		pushScreen(scrn);
 	}
 	
 	private void displayAlerts(final Vector alerts)
@@ -1973,21 +2014,27 @@ public class NwsClient extends UiApplication
 		}
 	}
 	
-	private Vector getAlerts(final LocationData location)
-	{
-		if (location.getCountry().equals("US") && options.useNws()) {
-			final Hashtable alerts = getNWSAlerts(location);
-			if (alerts.containsKey("hazards")) {
-				Hashtable types = (Hashtable)alerts.get("hazards");
-				if (types.containsKey("hazard-conditions")) {
-					return (Vector)types.get("hazard-conditions");
-				}
+	private Vector alertHashToVector(final Hashtable alerts) {
+		if (alerts.containsKey("hazards")) {
+			Hashtable types = (Hashtable)alerts.get("hazards");
+			if (types.containsKey("hazard-conditions")) {
+				ObservationGroup obsGroup = (ObservationGroup)types.get("hazard-conditions");
+				return obsGroup.samples;
 			}
 		}
 		return new Vector();
 	}
 	
-	private String getDisplayNWSAlerts(final LocationData location)
+	private Vector getAlerts(final LocationData location)
+	{
+		if (location.getCountry().equals("US") && options.useNws()) {
+			Hashtable alerts = getNWSAlerts(location);
+			return alertHashToVector(alerts);
+		}
+		return new Vector();
+	}
+	
+	private String displayNWSAlerts(final Hashtable forecastDetailData)
 	{
 		String alertStr = "";
 		synchronized(UiApplication.getEventLock()) {
@@ -1995,7 +2042,7 @@ public class NwsClient extends UiApplication
 			_mainScreen.setStatusVisible(true);
 		}
 		try {
-			final Vector alerts = getAlerts(location);
+			final Vector alerts = alertHashToVector(forecastDetailData);
 			if (alerts.size() > 0) {
 				// return the first alert
 				Observation alert = (Observation)alerts.elementAt(0);
@@ -2018,6 +2065,8 @@ public class NwsClient extends UiApplication
 					_mainScreen.add(errorLabel);
 				}
 			});
+		} finally {
+			_mainScreen.setStatusVisible(false);
 		}
 		return alertStr;
 	}
@@ -2063,7 +2112,6 @@ public class NwsClient extends UiApplication
 					displayForecast(location, flattened, 
 					"The National Oceanic and Atmospheric Administration"
 					);
-					_mainScreen.setStatusVisible(false);
 				}
 			});
 		} catch (Exception e) {
@@ -2079,17 +2127,22 @@ public class NwsClient extends UiApplication
 			// Always close our http connection
 			if (conn != null)
 				conn.close();
+			_mainScreen.setStatusVisible(false);
 		}
 	}
 	
 	/**
 	 * When passed a LocationData object fetches and displays the NDFD forecast
 	 * data for the requested location.
+	 *
+	 * Returns an array of strings representing the temperature, condition, and 
+	 * current conditions icon_url, respectively.
+	 *
 	 * @param location The LocationData object for which to get the forecast
 	 */
 	private String[] getDisplayNWSCurrentConditions(final LocationData location)
 	{
-		String[] conditions = {"", ""};
+		String[] iconData = {"", "", ""};
 		if (location.getIcao().equals("")) {
 			UiApplication.getUiApplication().invokeLater(new Runnable() {
 				public void run()
@@ -2102,15 +2155,19 @@ public class NwsClient extends UiApplication
 					);
 				}
 			});
-			return conditions;
+			return iconData;
 		}
 		
 		try {
 			final Hashtable parsed = getParseCurrentConditions(location);
-			if (parsed != null && parsed.containsKey("temperature")) {
-				// Remember the temperature and condition to pass to the icon updater
-				conditions[0] = (String)parsed.get("temperature");
-				conditions[1] = (String)parsed.get("condition");
+			if (parsed != null) {
+				// Remember the temperature, condition, and icon_rul string to pass to the icon updater
+				if (parsed.containsKey("temperature"))
+					iconData[0] = (String)parsed.get("temperature");
+				if (parsed.containsKey("condition"))
+					iconData[1] = (String)parsed.get("condition");
+				if (parsed.containsKey("icon_url"))
+					iconData[2] = (String)parsed.get("icon_url");
 			}
 			UiApplication.getUiApplication().invokeLater(new Runnable() {
 				public void run()
@@ -2128,7 +2185,30 @@ public class NwsClient extends UiApplication
 				}
 			});
 		}
-		return conditions;
+		return iconData;
+	}
+	
+	private Hashtable getNWSForecastDetail(final LocationData location)
+	{
+		final URLEncodedPostData post = new URLEncodedPostData(null, true);
+		post.append("whichClient", "NDFDgen");
+		post.append("lat", Double.toString(location.getLat()));
+		post.append("lon", Double.toString(location.getLon()));
+		post.append("product", "time-series");
+		
+		HttpHelper.Connection conn = null;
+		try {
+			conn = HttpHelper.getUrl(NWS_XML_URL+"?"+post.toString());
+			final String[] observations = {}; // empty array
+			final Hashtable details = parseNDFD(conn.is, observations);
+			return details;
+		} catch (Exception e) {
+			return null;
+		} finally {
+			// Always close our http connection
+			if (conn != null)
+				conn.close();
+		}
 	}
 	
 	/**
@@ -2152,12 +2232,14 @@ public class NwsClient extends UiApplication
 		String myCountry = location.getCountry();
 		if (myCountry.equals("US") && options.useNws()) {
 			// United States - Get NWS NDFD data 	
-			String weather[] = getDisplayNWSCurrentConditions(location);
+			String iconData[] = getDisplayNWSCurrentConditions(location);
+			
+			_forecastDetail = getNWSForecastDetail(location);
 			
 			// Alerts!
-			String alert = getDisplayNWSAlerts(location);
+			String alert = displayNWSAlerts(_forecastDetail);
 			
-			updateIcon(location, weather[0], weather[1], alert);
+			updateIcon(location, iconData[0], iconData[1], iconData[2], alert);
 			
 			// Separate call for the forecast
 			getDisplayNWSForecast(location);
@@ -2220,6 +2302,98 @@ public class NwsClient extends UiApplication
 			(splash[0] + splash[1] + splash[2] + splash[3]), 
 			off, attr, fnts, fgColors, bgColors, RichTextField.TEXT_ALIGN_HCENTER);
 		vField.add(text);
+	}
+	
+	private synchronized void updateIcon(final LocationData loc, 
+			String temp, String condition, String rolloverIconUrl, String alert)
+	{
+		if (!HomeScreen.supportsIcons()) 
+			return;
+		
+		int lOffset = 22; // left offset, for temp of two chars length
+		int smallSize = 12;
+		
+		Bitmap bg = Bitmap.getBitmapResource("icon.png");
+		// bigIcon likely to be true on the Blackberry Storm (72px vs. 48px)
+		boolean bigIcon = (bg.getWidth() > 48); 
+		if (bigIcon) { 
+			lOffset = 36;
+			smallSize = 18;
+		}
+		FontFamily fontfam[] = FontFamily.getFontFamilies();
+		Font smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, smallSize);
+		
+		// Strip off anything after a decimal point
+		int decPos = temp.indexOf('.');
+		if (decPos != -1) {
+			// We've got a decimal point, get rid of it
+			temp = temp.substring(0, decPos);
+		}
+		
+		int yPos = (bigIcon) ? 29 : 12;
+		if (temp.length() == 1) {
+			// Single digits!
+			lOffset = (bigIcon) ? 41 : 25;
+		} else if (temp.length() == 3) { 
+			// move to the left if 3 chars long
+			lOffset = (bigIcon) ? 32 : 20;
+			smallSize = (bigIcon) ? 16 : 10;
+			smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, smallSize);
+		} else if (temp.length() > 3) {
+			// Crazy temperature!
+			lOffset = 32;
+			temp = "err";
+			smallSize = (bigIcon) ? 16 : 10;
+			smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, smallSize);
+		}
+		
+		Graphics gfx = new Graphics(bg);
+		if (alert != "") {
+			gfx.setColor(0xffff33); // yellow text
+			if (bigIcon)
+				gfx.fillArc(8, 39, 28, 28, 0, 360);
+			else
+				gfx.fillArc(5, 18, 16, 16, 0, 360);
+			gfx.setColor(0xff3333); // red background
+			if (bigIcon)
+				gfx.drawArc(10, 41, 24, 24, 0, 360);
+			else
+				gfx.drawArc(6, 19, 14, 14, 0, 360);
+			Font boldFont = smallFont.derive(Font.BOLD);
+			gfx.setFont(boldFont);
+			if (bigIcon) {
+				gfx.drawText("!", 18, 44);
+			} else {
+				gfx.drawText("!", 11, 20); // Exclamation point
+			}
+		}
+		gfx.setFont(smallFont);
+		gfx.drawText(temp, lOffset, yPos);
+		HomeScreen.updateIcon(bg, 1);
+		
+		if (options.changeAppName()) { 
+			// App name is the temperature, current condition string
+			String tempType = (options.metric()) ? "C, " : "\u00b0F, ";
+			String appName;
+			if (alert != "") {
+				appName = loc.getLocality() + ": " + alert;
+			} else {
+				appName = loc.getLocality() + ": " + temp + tempType + condition;
+			}
+			HomeScreen.setName(appName, 1);
+		} else {
+			HomeScreen.setName("NWSClient", 1);
+		}
+		
+		if (options.changeAppRolloverIcon() && rolloverIconUrl != "") {
+			final EncodedImage img = _bitmapProvider.fetchBitmap(rolloverIconUrl);
+			if (img != null)
+				_bitmapProvider.setRolloverIcon(img);
+			return;
+		} 
+		// If we're not changing the rollover icon make
+		// sure the rollover is the same as the regular icon
+		HomeScreen.setRolloverIcon(bg, 1);
 	}
 	
 }
