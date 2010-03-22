@@ -26,6 +26,7 @@ BitmapProvider.java
 data\radar_stations.data
 data\weather_stations.data
 data\wfo.data
+DetailScreen.java
 HttpHelper.java
 img\icon.png
 LabelStatusField.java
@@ -67,4 +68,4 @@ SystemModule=1
 Title=NWSClient
 Type=0
 Vendor=renderfast.com
-Version=1.19
+Version=1.20

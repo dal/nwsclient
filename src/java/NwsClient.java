@@ -274,7 +274,6 @@ public class NwsClient extends UiApplication
 		
 		protected boolean keyChar(char key, int status, int time)
 		{
-			// UiApplication.getUiApplication().getActiveScreen().
 			if (getLeafFieldWithFocus() == _newLocField && key == Characters.ENTER) {
 				storeInterfaceValues();
 				_newLocationMenuItem.run();
@@ -865,24 +864,41 @@ public class NwsClient extends UiApplication
 	}
 		
 	private LocationData getLocationData(String userAddress) throws NotFoundException {
+		final MainScreen myScrn = new MainScreen();
 		// Encode the URL (from net.rim.blackberry.api.browser)
 		URLEncodedPostData post = new URLEncodedPostData(null, true);
 		post.append("q", userAddress);
 		post.append("output", "xml");
 		post.append("key", GOOGLE_API_KEY);
-		HttpHelper.Connection conn = null; 
+		HttpHelper.Connection conn = null;
+		
 		// Parse the XML from the Google Maps Geocoder
 		try {
 			conn = HttpHelper.getUrl(GOOGLE_MAPS_URL+"?"+post.toString());
+			synchronized(UiApplication.getEventLock()) {
+				myScrn.add(new LabelField("fetched url"));
+			}
+			
+			/* Kludge alert:
+			 * I grab the location data as a string and then turn it back into 
+			 * a stream because I've had problems with the raw stream hanging
+			 * the DocumentBuilder.parse() method under JDE 4.5.
+			 */
+			String data = conn.asString();
+			InputStream is = new ByteArrayInputStream(data.getBytes("UTF-8"));
 			
 			DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
 			DocumentBuilder builder = factory.newDocumentBuilder();
-			Document document = builder.parse(conn.is);
+			Document document = builder.parse(is);
 			
 			LocationData loc = new LocationData();
 			loc.setUserAddress(userAddress);
 			
 			loc.loadFromXml(document);
+			synchronized(UiApplication.getEventLock()) {
+				LabelField lbl = new LabelField("done");
+				myScrn.add(lbl);
+			}
 			return loc;
 
 		} catch (IOException ioe) {
@@ -1102,7 +1118,6 @@ public class NwsClient extends UiApplication
 		
 		for (int h=0; h < observations.length; h++) {
 			String obsName = observations[h];
-			System.err.println("Getting observation "+obsName);
 			
 			NodeList obsNodes = root.getElementsByTagName(obsName);
 			
@@ -1153,7 +1168,6 @@ public class NwsClient extends UiApplication
 							theObs.units = obsUnits;
 							
 							Element obsChild = (Element)tmpNode;
-							System.err.println("  obsChild: "+obsChild.getTagName());
 							// Watch for nil values and skip them...
 							String nil = obsChild.getAttribute("xsi:nil");
 							if (nil.equals("true")) {
@@ -1228,8 +1242,15 @@ public class NwsClient extends UiApplication
 										Element weatherValueNode = (Element)weatherNodes.item(0);
 										for (int k=0; k < weatherSubAttrs.length; k++) {
 											if (weatherValueNode.hasAttribute(weatherSubAttrs[k])) {
-												weatherVal.append(weatherValueNode.getAttribute(weatherSubAttrs[k]));
-												weatherVal.append(" ");
+												String theAttrVal = weatherValueNode.getAttribute(weatherSubAttrs[k]);
+												/* 
+												 * weather-condition sometimes has a qualifier attr whose
+												 * value is "none", which looks really weird
+												 */
+												if (!theAttrVal.equals("none")) {
+													weatherVal.append(theAttrVal);
+													weatherVal.append(" ");
+												}
 											}
 										}
 										theObs.value = weatherVal.toString();
@@ -1741,11 +1762,19 @@ public class NwsClient extends UiApplication
 	
 	private void displayForecastDetail(final Hashtable forecastDetail, final Calendar when)
 	{
-		DetailScreen scrn = new DetailScreen(forecastDetail, when);
-		pushScreen(scrn);
+		if (forecastDetail != null) {
+			DetailScreen scrn = new DetailScreen(forecastDetail, when);
+			synchronized(UiApplication.getEventLock()) {
+				pushScreen(scrn);
+			}
+		} else {
+			synchronized(UiApplication.getEventLock()) {
+				Dialog.alert(_resources.getString(nwsclientResource.NO_DETAIL));
+			}
+		}
 	}
 	
-	private void displayAlerts(final Vector alerts)
+	private void displayAlerts(final Vector alerts, int fieldIndex)
 	{
 		DateFormat dateFormat = new SimpleDateFormat("ha E");
 		Observation lastAlert = null;
@@ -1782,11 +1811,11 @@ public class NwsClient extends UiApplication
 						}
 					};
 					warningField.setChangeListener(warningListener);
-					_mainScreen.add(warningField);
+					_mainScreen.insert(warningField, fieldIndex++);
 				} else {
 					Date alertDate = alert.time.startTime.getTime();
 					String alertTimeStr = dateFormat.format(alertDate, new StringBuffer(), null).toString();
-					_mainScreen.add(new RichTextField(alert.value+" "+alert.units+" "+alertTimeStr));
+					_mainScreen.insert(new RichTextField(alert.value+" "+alert.units+" "+alertTimeStr), fieldIndex++);
 				}
 				lastAlert = null;
 			} else if (lastAlert == null) {
@@ -1794,9 +1823,9 @@ public class NwsClient extends UiApplication
 			}
 		}
 		if (alerts.size() == 0) {
-			_mainScreen.add(new RichTextField("No alerts or warnings"));
+			_mainScreen.insert(new RichTextField("No alerts or warnings"), fieldIndex++);
 		}
-		_mainScreen.add(new SeparatorField());
+		_mainScreen.insert(new SeparatorField(), fieldIndex++);
 	}
 	
 	private void displayCredit(final String who, final long when)
@@ -1996,7 +2025,7 @@ public class NwsClient extends UiApplication
 		post.append("lat", Double.toString(location.getLat()));
 		post.append("lon", Double.toString(location.getLon()));
 		post.append("product", "time-series");
-		post.append("wwa", "wwa"); // Get watches and warnings
+		post.append("wwa", "wwa"); // Get only watches and warnings
 		
 		// <hazard hazardCode="FW.W" phenomena="Red Flag" significance="Warning" hazardType="long duration">
 		
@@ -2034,13 +2063,10 @@ public class NwsClient extends UiApplication
 		return new Vector();
 	}
 	
-	private String displayNWSAlerts(final Hashtable forecastDetailData)
+	private String displayNWSAlerts(final Hashtable forecastDetailData, 
+														final int fieldIndex)
 	{
 		String alertStr = "";
-		synchronized(UiApplication.getEventLock()) {
-			_mainScreen.setStatusText(_resources.getString(nwsclientResource.GETTING_ALERTS));
-			_mainScreen.setStatusVisible(true);
-		}
 		try {
 			final Vector alerts = alertHashToVector(forecastDetailData);
 			if (alerts.size() > 0) {
@@ -2052,7 +2078,7 @@ public class NwsClient extends UiApplication
 			UiApplication.getUiApplication().invokeLater(new Runnable() {
 				public void run()
 				{
-					displayAlerts(alerts);
+					displayAlerts(alerts, fieldIndex);
 				}
 			});
 			
@@ -2199,7 +2225,11 @@ public class NwsClient extends UiApplication
 		HttpHelper.Connection conn = null;
 		try {
 			conn = HttpHelper.getUrl(NWS_XML_URL+"?"+post.toString());
-			final String[] observations = {}; // empty array
+			/* 
+			 * passing an empty array as the observation list will make
+			 * parseNDFD return all available observations
+			 */
+			final String[] observations = {}; 
 			final Hashtable details = parseNDFD(conn.is, observations);
 			return details;
 		} catch (Exception e) {
@@ -2234,15 +2264,24 @@ public class NwsClient extends UiApplication
 			// United States - Get NWS NDFD data 	
 			String iconData[] = getDisplayNWSCurrentConditions(location);
 			
-			_forecastDetail = getNWSForecastDetail(location);
-			
-			// Alerts!
-			String alert = displayNWSAlerts(_forecastDetail);
-			
-			updateIcon(location, iconData[0], iconData[1], iconData[2], alert);
+			int alertIndex = _mainScreen.getFieldCount();
 			
 			// Separate call for the forecast
 			getDisplayNWSForecast(location);
+			
+			synchronized(UiApplication.getEventLock()) {
+				_mainScreen.setStatusText(_resources.getString(nwsclientResource.GETTING_DETAIL));
+				_mainScreen.setStatusVisible(true);
+			}
+			_forecastDetail = getNWSForecastDetail(location);
+			synchronized(UiApplication.getEventLock()) {
+				_mainScreen.setStatusVisible(false);
+			}
+			
+			// Alerts!
+			String alert = displayNWSAlerts(_forecastDetail, alertIndex);
+			
+			updateIcon(location, iconData[0], iconData[1], iconData[2], alert);
 			
 		} else {
 			// International - get Google Weather

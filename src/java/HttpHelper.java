@@ -25,14 +25,24 @@ public class HttpHelper
 
 	public static class Connection
 	{
-		public InputStream is;
+		public DataInputStream is;
 		public StreamConnection s;
 		
-		public Connection(StreamConnection str, InputStream istr)
+		public Connection(StreamConnection str, DataInputStream istr)
 		{
 			s = str;
 			is = istr;
 		}
+        
+        public String asString() throws IOException 
+        {
+            StringBuffer buf = new StringBuffer();
+            int ch;
+			while((ch = is.read()) != -1) {
+				buf.append((char) ch);
+			}
+            return buf.toString();
+        }
 		
 		public void close() 
 		{
@@ -64,11 +74,9 @@ public class HttpHelper
 	{
 		System.err.println("Fetching url "+url);
 		StreamConnection s = null;
-		InputStream is = null;
+		DataInputStream is = null;
 		
 		Connection ret = new Connection(s, is);
-		
-		int rc;
 		
 		try {
 			
@@ -78,7 +86,7 @@ public class HttpHelper
 			int status = httpConn.getResponseCode();
 			
 			if (status == HttpConnection.HTTP_OK) {
-				ret.is = httpConn.openInputStream();
+				ret.is = httpConn.openDataInputStream();
 				return ret;
 			// Redirect?
 			} else if (status == HttpConnection.HTTP_MOVED_PERM 
@@ -91,7 +99,7 @@ public class HttpHelper
 					httpConn = (HttpConnection)ret.s;
 					status = httpConn.getResponseCode();
 					if (status == HttpConnection.HTTP_OK) {
-						ret.is = httpConn.openInputStream();
+						ret.is = httpConn.openDataInputStream();
 						return ret;
 					} else {
 						System.err.println("Error fetching redirected url. Status: "+status);
