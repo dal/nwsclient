@@ -64,7 +64,7 @@ public class HttpHelper
 	}
 
 	/**
-	 * Convenience method takes a string url and fetches an Connection object.
+	 * Convenience method takes a string url and fetches a Connection object.
 	 * <p>
 	 * Returns null if there's a problem fetching the url.
 	 * @param url The web url to fetch.

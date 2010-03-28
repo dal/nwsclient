@@ -111,6 +111,7 @@ public class NwsClient extends UiApplication
 	public static class TimeKey
 	{
 		public Calendar startTime;
+		public Calendar endTime;
 		public String periodName;
 	};
 	
@@ -383,7 +384,7 @@ public class NwsClient extends UiApplication
 			// empty constructor
 		}
 		
-		public void doUpdateIcon()
+		public boolean doUpdateIcon()
 		{
 			// Get the current temperature
 			try {
@@ -409,6 +410,8 @@ public class NwsClient extends UiApplication
 					
 					updateIcon(location_, temp, cond, rolloverIconUrl, alertStr);
 					
+					return true;
+					
 				} else {
 					System.err.println("Error getting icon current conditions: null current conditions");
 				}
@@ -419,6 +422,8 @@ public class NwsClient extends UiApplication
 			} catch (Exception e) {
 				System.err.println("Error getting current conditions for icon: " + e.getMessage());
 			}
+			
+			return false;
 			
 		}
 		
@@ -458,8 +463,8 @@ public class NwsClient extends UiApplication
 					getOptionsFromStore();
 					if (thisInterval >= UPDATE_INTERVAL || _firstInit) {
 						_firstInit = false;
-						doUpdateIcon();
-						location_.setLastUpdated(now);
+						if (doUpdateIcon())
+							location_.setLastUpdated(now);
 					} else {
 						// Wait four seconds
 						Thread.sleep(UPDATE_INTERVAL);
@@ -630,6 +635,44 @@ public class NwsClient extends UiApplication
 		}
 	}
 	
+	public static void getLinkInBrowser(String url)
+	{
+		BrowserSession sess = Browser.getDefaultSession();
+		sess.displayPage(url);
+	}
+	
+	public static Vector rollUpObservations(Vector observations)
+	{
+		Vector rolledUp = new Vector();
+		Observation lastObs = null;
+		for (int i=0; i < observations.size(); i++) {
+			Observation theObs = (Observation)observations.elementAt(i);
+			boolean last = false;
+			if (i == (observations.size()-1)) {
+				// this is the last observation in the list!
+				last = true;
+			} else {
+				// it's not the last observation but the next one is different
+				Observation nextObs = (Observation)observations.elementAt(i+1);
+				last = (!nextObs.value.equals(theObs.value) || !nextObs.units.equals(theObs.units));
+			}
+			
+			if (last) {
+				// Roll it up into one new value!
+				if (lastObs != null) {
+					if (theObs.time.endTime == null)
+						theObs.time.endTime = theObs.time.startTime;
+					theObs.time.startTime = lastObs.time.startTime;
+				}
+				rolledUp.addElement(theObs);
+				lastObs = null;
+			} else if (lastObs == null) {
+				lastObs = theObs;
+			}
+		}
+		return rolledUp;
+	}
+	
 	/* Class methods */
 	
 	public String getNewLocation()
@@ -744,7 +787,7 @@ public class NwsClient extends UiApplication
 	public NwsClient(boolean autostart)
 	{	
 		// Don't need to start the bitmpaProvider--it will start on demand
-		_bitmapProvider = new BitmapProvider();
+		_bitmapProvider = BitmapProvider.GetInstance();
 		
 		if (autostart) {
 			_foreground = false;
@@ -783,12 +826,6 @@ public class NwsClient extends UiApplication
 				viewOptions();
 			}
 		}
-	}
-	
-	public void getLinkInBrowser(String url)
-	{
-		BrowserSession sess = Browser.getDefaultSession();
-		sess.displayPage(url);
 	}
 	
 	protected boolean acceptsForeground()
@@ -921,9 +958,12 @@ public class NwsClient extends UiApplication
 		// I have to parse the date myself because RIM's SimpleDateFormat doesn't
 		// implement the 'parse' method. Lame.
 		String part;
-		Calendar cal = Calendar.getInstance(); // new calendar object
 		
 		// Time string looks like '2008-10-12T20:00:00-04:00'
+		// Get the timezone value from the string and set it
+		String myTimeZone = "GMT"+timeStr.substring(19,22);
+		TimeZone tz = TimeZone.getTimeZone(myTimeZone);
+		Calendar cal = Calendar.getInstance(); // new calendar object
 		// Year
 		part = timeStr.substring(0,4); // strip off the time zone information
 		cal.set(Calendar.YEAR, Integer.parseInt(part));
@@ -939,9 +979,6 @@ public class NwsClient extends UiApplication
 		// Minute
 		part = timeStr.substring(14,16);
 		cal.set(Calendar.MINUTE, Integer.parseInt(part));
-		// Get the timezone value from the string and set it
-		TimeZone tz = TimeZone.getTimeZone(timeStr.substring(19,22));
-		cal.setTimeZone(tz);
 		// Return a date object
 		return cal;
 	}
@@ -964,6 +1001,7 @@ public class NwsClient extends UiApplication
 				Vector fcTimes = new Vector();
 				
 				// Loop through children of this time-layout
+				TimeKey lastTimeKey = null;
 				Node tmpChildNode = myNode.getFirstChild();
 				while(tmpChildNode != null) {
 					if (tmpChildNode.getNodeType() == Node.ELEMENT_NODE) {
@@ -971,6 +1009,7 @@ public class NwsClient extends UiApplication
 						
 						if (child.getTagName().equals("start-valid-time")) {
 							TimeKey myTime = new TimeKey();
+							lastTimeKey = myTime;
 							myTime.startTime = parseTime(XmlHelper.getNodeText(child)); // Convert time string to timestamp
 							myTime.periodName = "";
 							// Look for the string name of this time period, e.g. "Thursday"
@@ -978,6 +1017,10 @@ public class NwsClient extends UiApplication
 								myTime.periodName = child.getAttribute("period-name");	
 							}
 							fcTimes.addElement(myTime);
+						} else if (child.getTagName().equals("end-valid-time")
+							&& lastTimeKey != null) 
+						{
+							lastTimeKey.endTime = parseTime(XmlHelper.getNodeText(child));
 						}
 					}
 					// next time node
@@ -1012,7 +1055,7 @@ public class NwsClient extends UiApplication
 			Hashtable day = new Hashtable();
 			Observation myCond = (Observation)conditions.samples.elementAt(i);
 			String temp = "";
-			String timeStr = "";
+			String timeStr = null;
 			Observation tempObs = null;
 			Calendar time = null;
 			/* Grab the temperature observation
@@ -1029,7 +1072,8 @@ public class NwsClient extends UiApplication
 			}
 			
 			if (tempObs != null) {
-				time = tempObs.time.startTime;
+				if (tempObs.time.endTime != null)
+					time = tempObs.time.startTime;
 				if (options.metric() && tempObs.units.equals("Fahrenheit")) {
 					temp = fahrenheitToCelsius(Integer.valueOf(tempObs.value).intValue()) + " C";
 				} else {
@@ -1050,8 +1094,10 @@ public class NwsClient extends UiApplication
 			/* Put the calendar time in for the forecast detail link
 			 * Google forecast data won't have these keys
 			 */
-			day.put("timeStr", timeStr);
-			day.put("time", tempObs.time.startTime);
+		    if (time != null && timeStr != null) {
+				day.put("timeStr", timeStr);
+				day.put("time", tempObs.time.startTime);
+			}
 			
 			if (iconUrl != null)
 				day.put("icon_url", iconUrl.value);
@@ -1280,14 +1326,14 @@ public class NwsClient extends UiApplication
 			Element root = document.getDocumentElement();
 			
 			// weather "Partly Cloudy"
-			cc.put("condition", XmlHelper.getValue(root, "weather"));
+			cc.put("condition", XmlHelper.getValueIfExists(root, "weather"));
 			// observation_time "Last Updated on Feb 24, 10:53 pm PST"
 			cc.put("observation_time", XmlHelper.getValueIfExists(root, "observation_time"));
 			// temperature "55"
 			if (options.metric()) {
-				cc.put("temperature", XmlHelper.getValue(root, "temp_c"));
+				cc.put("temperature", XmlHelper.getValueIfExists(root, "temp_c"));
 			} else {
-				cc.put("temperature", XmlHelper.getValue(root, "temp_f"));
+				cc.put("temperature", XmlHelper.getValueIfExists(root, "temp_f"));
 			}
 			// relative_humidity "65"
 			cc.put("relative_humidity", XmlHelper.getValueIfExists(root, "relative_humidity"));
@@ -1312,8 +1358,6 @@ public class NwsClient extends UiApplication
 			if (iconUrlBase != "" && iconUrlName != "")
 				iconUrl = iconUrlBase + iconUrlName;
 			cc.put("icon_url", iconUrl);
-		} catch (ParseError pe) {
-			throw new ParseError(pe.toString());
 		} catch (ParserConfigurationException pce) {
 			throw new RuntimeException(pce.toString());
 		} catch (SAXException se) {
@@ -1777,52 +1821,35 @@ public class NwsClient extends UiApplication
 	private void displayAlerts(final Vector alerts, int fieldIndex)
 	{
 		DateFormat dateFormat = new SimpleDateFormat("ha E");
-		Observation lastAlert = null;
-		for (int i=0; i < alerts.size(); i++) {
-			Observation alert = (Observation)alerts.elementAt(i);
-			boolean last = false;
-			if (i == (alerts.size()-1)) {
-				// this is the last alert in the list!
-				last = true;
-			} else {
-				// it's not the last alert but the next one is different
-				Observation nextAlert = (Observation)alerts.elementAt(i+1);
-				last = (!nextAlert.value.equals(alert.value) || !nextAlert.units.equals(alert.units));
+		Vector rolledUpAlerts = rollUpObservations(alerts);
+		for (int i=0; i < rolledUpAlerts.size(); i++) {
+			Observation alert = (Observation)rolledUpAlerts.elementAt(i);
+			Date alertDate = alert.time.startTime.getTime();
+			final String alertUrl = alert.url;
+			String startTimeStr = dateFormat.format(alertDate, new StringBuffer(), null).toString();
+			String endTimeStr = "";
+			if (alert.time.endTime != null) {
+				Date endDate = alert.time.endTime.getTime();
+				endTimeStr = dateFormat.format(endDate, new StringBuffer(), null).toString();
+				endTimeStr = " - "+endTimeStr;
 			}
-			
-			if (last) {
-				// We need to print!
-				if (lastAlert != null) {
-					Date alertDate = lastAlert.time.startTime.getTime();
-					Date endDate = alert.time.startTime.getTime();
-					final String alertUrl = alert.url;
-					String startTimeStr = dateFormat.format(alertDate, new StringBuffer(), null).toString();
-					String endTimeStr = dateFormat.format(endDate, new StringBuffer(), null).toString();
-					LinkField warningField = new LinkField(alert.value+" "+alert.units+" "+startTimeStr+" - "+endTimeStr) {
-						public void paint(Graphics graphics) {
-							// Warning text is red
-							graphics.setColor(0xff0000);
-							super.paint(graphics);
-						}
-					};
-					FieldChangeListener warningListener = new FieldChangeListener() {
-						public void fieldChanged(Field field, int context) {
-							getLinkInBrowser(alertUrl);
-						}
-					};
-					warningField.setChangeListener(warningListener);
-					_mainScreen.insert(warningField, fieldIndex++);
-				} else {
-					Date alertDate = alert.time.startTime.getTime();
-					String alertTimeStr = dateFormat.format(alertDate, new StringBuffer(), null).toString();
-					_mainScreen.insert(new RichTextField(alert.value+" "+alert.units+" "+alertTimeStr), fieldIndex++);
+			LinkField warningField = new LinkField(alert.value+" "+alert.units+" "+startTimeStr+endTimeStr) {
+				public void paint(Graphics graphics) {
+					// Warning text is red
+					graphics.setColor(0xff0000);
+					super.paint(graphics);
 				}
-				lastAlert = null;
-			} else if (lastAlert == null) {
-				lastAlert = alert;
-			}
+			};
+			FieldChangeListener warningListener = new FieldChangeListener() {
+				public void fieldChanged(Field field, int context) {
+					getLinkInBrowser(alertUrl);
+				}
+			};
+			warningField.setChangeListener(warningListener);
+			_mainScreen.insert(warningField, fieldIndex++);
 		}
-		if (alerts.size() == 0) {
+		
+		if (rolledUpAlerts.size() == 0) {
 			_mainScreen.insert(new RichTextField("No alerts or warnings"), fieldIndex++);
 		}
 		_mainScreen.insert(new SeparatorField(), fieldIndex++);
@@ -1982,23 +2009,18 @@ public class NwsClient extends UiApplication
 		try {
 			final Hashtable weather = getGoogleWeather(location);
 			final Vector fc = (Vector)weather.get("forecast");
-			UiApplication.getUiApplication().invokeLater(new Runnable() {
-				public void run()
-				{
-					displayGoogleCurrentConditions(location, (Hashtable)weather.get("current_conditions"));
-					displayForecast(location, fc, "Google");
-				}
-			});
+			synchronized(UiApplication.getEventLock()) {
+				clearScreen();
+				displayGoogleCurrentConditions(location, (Hashtable)weather.get("current_conditions"));
+				displayForecast(location, fc, "Google");
+			}
 		} catch(Exception e) {
 			final String msg = e.getMessage();
-			UiApplication.getUiApplication().invokeLater(new Runnable() {
-				public void run()
-				{
-					clearScreen();
-					LabelField errorLabel = new LabelField("Error loading Google Weather: "+msg);
-					_mainScreen.add(errorLabel);
-				}
-			});
+			synchronized(UiApplication.getEventLock()) {
+				clearScreen();
+				LabelField errorLabel = new LabelField("Error loading Google Weather: "+msg);
+				_mainScreen.add(errorLabel);
+			}
 		}
 	}
 	
@@ -2170,17 +2192,14 @@ public class NwsClient extends UiApplication
 	{
 		String[] iconData = {"", "", ""};
 		if (location.getIcao().equals("")) {
-			UiApplication.getUiApplication().invokeLater(new Runnable() {
-				public void run()
-				{
-					clearScreen();
-					// Can't get current conditions
-					_mainScreen.add(new RichTextField(
-						"Error getting current conditions: "+
-						"Could not find closest weather station for location.")
-					);
-				}
-			});
+			synchronized(UiApplication.getEventLock()) {
+				clearScreen();
+				// Can't get current conditions
+				_mainScreen.add(new RichTextField(
+					"Error getting current conditions: "+
+					"Could not find closest weather station for location.")
+				);
+			}
 			return iconData;
 		}
 		
@@ -2195,21 +2214,16 @@ public class NwsClient extends UiApplication
 				if (parsed.containsKey("icon_url"))
 					iconData[2] = (String)parsed.get("icon_url");
 			}
-			UiApplication.getUiApplication().invokeLater(new Runnable() {
-				public void run()
-				{
-					displayNWSCurrentConditions(location, parsed);
-				}
-			});
+			synchronized(UiApplication.getEventLock()) {
+				displayNWSCurrentConditions(location, parsed);
+			}
 		} catch (Exception ioe) {
 			final String msg = ioe.getMessage();
-			UiApplication.getUiApplication().invokeLater(new Runnable() {
-				public void run() {
-					clearScreen();
-					LabelField errorLabel = new LabelField("Error getting current conditions: "+msg);
-					_mainScreen.add(errorLabel);
-				}
-			});
+			synchronized(UiApplication.getEventLock()) {
+				clearScreen();
+				LabelField errorLabel = new LabelField("Error getting current conditions: "+msg);
+				_mainScreen.add(errorLabel);
+			}
 		}
 		return iconData;
 	}
@@ -2253,6 +2267,8 @@ public class NwsClient extends UiApplication
 	{
 		// Indicate update is happening
 		location.setLastUpdated(System.currentTimeMillis());
+		
+		_forecastDetail = null; // invalidate the forecast details
 		
 		synchronized(UiApplication.getEventLock()) {
 			_mainScreen.setStatusText(_resources.getString(nwsclientResource.GETTING_WEATHER));
@@ -2349,8 +2365,8 @@ public class NwsClient extends UiApplication
 		if (!HomeScreen.supportsIcons()) 
 			return;
 		
-		int lOffset = 22; // left offset, for temp of two chars length
-		int smallSize = 12;
+		int lOffset = 20; // 22 left offset, for temp of two chars length
+		int smallSize = 16; // 12
 		
 		Bitmap bg = Bitmap.getBitmapResource("icon.png");
 		// bigIcon likely to be true on the Blackberry Storm (72px vs. 48px)
@@ -2369,20 +2385,22 @@ public class NwsClient extends UiApplication
 			temp = temp.substring(0, decPos);
 		}
 		
-		int yPos = (bigIcon) ? 29 : 12;
+		int yPos = (bigIcon) ? 29 : 10;
 		if (temp.length() == 1) {
 			// Single digits!
-			lOffset = (bigIcon) ? 41 : 25;
+			lOffset = (bigIcon) ? 41 : 23;
 		} else if (temp.length() == 3) { 
 			// move to the left if 3 chars long
+			yPos = (bigIcon) ? 32 : 12;
 			lOffset = (bigIcon) ? 32 : 20;
-			smallSize = (bigIcon) ? 16 : 10;
+			smallSize = (bigIcon) ? 16 : 12;
 			smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, smallSize);
 		} else if (temp.length() > 3) {
 			// Crazy temperature!
-			lOffset = 32;
+			yPos = (bigIcon) ? 32 : 12;
+			lOffset = (bigIcon) ? 32: 20;
 			temp = "err";
-			smallSize = (bigIcon) ? 16 : 10;
+			smallSize = (bigIcon) ? 16 : 12;
 			smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, smallSize);
 		}
 		

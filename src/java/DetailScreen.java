@@ -8,20 +8,24 @@ import net.rim.device.api.i18n.*;
 import net.rim.device.api.ui.component.*;
 import net.rim.device.api.ui.container.*;
 
-public class DetailScreen extends MainScreen
+public class DetailScreen extends AbstractScreen
 {
 	
-	private static final String[] obs = { "temperature", "precipitation", 
-		"wind-speed", "direction", "weather", "probability", "humidity", 
-		"cloud-amount"
+	private BitmapProvider _bitmapProvider;
+	
+	private static final String[] obs = { "hazards", "temperature", 
+		"precipitation", "wind-speed", "direction", "weather", "probability", 
+		"humidity", "cloud-amount", "conditions-icon"
 	};
 	
     public DetailScreen(final Hashtable forecastDetail, final Calendar when)
 	{
 		super();
 		
-		DateFormat dayFormat = new SimpleDateFormat("EEEE"); // day of week
-		DateFormat timeFormat = new SimpleDateFormat("ha"); // 8pm
+		_bitmapProvider = BitmapProvider.GetInstance();
+		
+		DateFormat dayFormat = new SimpleDateFormat("EEEE"); // day of week: "Monday"
+		DateFormat timeFormat = new SimpleDateFormat("ha"); // time: "8p"
 		
 		int desiredDate = when.get(Calendar.DATE); // day of month
 		Date now = when.getTime();
@@ -37,42 +41,80 @@ public class DetailScreen extends MainScreen
 		
 		for (int i=0; i < obs.length; i++) {
 			if (forecastDetail.containsKey(obs[i])) {
-				Hashtable obsType = (Hashtable)forecastDetail.get(obs[i]);
+				String type = obs[i];
+				Hashtable obsType = (Hashtable)forecastDetail.get(type);
 				
-				Vector subTypes = GetObservationSubTypes(obs[i], obsType);
+				Vector subTypes = GetObservationSubTypes(type, obsType);
 				
 				for (int j=0; j< subTypes.size(); j++) {
-					String type = (String)subTypes.elementAt(j);
+					String subType = (String)subTypes.elementAt(j);
 					
-					if (obsType.containsKey(type)) {
+					if (obsType.containsKey(subType)) {
 					
-						NwsClient.ObservationGroup obs = (NwsClient.ObservationGroup)obsType.get(type);
+						NwsClient.ObservationGroup obs = (NwsClient.ObservationGroup)obsType.get(subType);
 						
-						// Print the subType's observations first, then insert the label later
-						int startIndex = getFieldCount();
-						int foundObs = 0;
-						
+						Vector foundObservations = new Vector();
+						// Find only observations for the desired day
 						for (int k=0; k < obs.samples.size(); k++) {
 							NwsClient.Observation theObs = (NwsClient.Observation)obs.samples.elementAt(k);
-							if (theObs.time.startTime.get(Calendar.DATE) == desiredDate) {
-								Date thisDate = theObs.time.startTime.getTime();
-								String date = timeFormat.format(thisDate, new StringBuffer(), null).toString();
-								add(new RichTextField(date+" "+theObs.value+" "+theObs.units));
-								foundObs++;
-							}
+							if (theObs.time.startTime.get(Calendar.DATE) == desiredDate)
+								foundObservations.addElement(theObs);
 						}
 						
 						// Only print the label if there are actually observations to show
-						if (foundObs > 0) {
+						if (foundObservations.size() > 0) {
 							String label = obs.type;
 							LabelField typeLabel = new LabelField(label);
 							typeLabel.setFont(fnt);
-							insert(typeLabel, startIndex);
+							add(typeLabel);
 							
+							if (type.equals("hazards")) 
+								foundObservations = NwsClient.rollUpObservations(foundObservations);
+							
+							for (int k=0; k < foundObservations.size(); k++) {
+								NwsClient.Observation theObs = (NwsClient.Observation)foundObservations.elementAt(k);
+								Date thisDate = theObs.time.startTime.getTime();
+								String date = timeFormat.format(thisDate, new StringBuffer(), null).toString();
+								if (type.equals("conditions-icon")) {
+									HorizontalFieldManager row =  new HorizontalFieldManager();
+									add(row);
+									BitmapField condBitmap = new BitmapField();
+									row.add(condBitmap);
+									row.add(new RichTextField(" "+date));
+									_bitmapProvider.getBitmap(theObs.value, condBitmap, false);
+								} else if (type.equals("hazards")) {
+									Date alertDate = theObs.time.startTime.getTime();
+									DateFormat dateFormat = new SimpleDateFormat("ha E");
+									
+									final String theObsUrl = theObs.url;
+									String startTimeStr = dateFormat.format(alertDate, new StringBuffer(), null).toString();
+									String endTimeStr = "";
+									if (theObs.time.endTime != null) {
+										Date endDate = theObs.time.endTime.getTime();
+										endTimeStr = dateFormat.format(endDate, new StringBuffer(), null).toString();
+										endTimeStr = " - "+endTimeStr;
+									}
+									LinkField warningField = new LinkField(theObs.value+" "+theObs.units+" "+startTimeStr+endTimeStr) {
+										public void paint(Graphics graphics) {
+											// Warning text is red
+											graphics.setColor(0xff0000);
+											super.paint(graphics);
+										}
+									};
+									FieldChangeListener warningListener = new FieldChangeListener() {
+										public void fieldChanged(Field field, int context) {
+											NwsClient.getLinkInBrowser(theObsUrl);
+										}
+									};
+									warningField.setChangeListener(warningListener);
+									add(warningField);
+								} else {
+									add(new RichTextField(date+" "+theObs.value+" "+theObs.units));
+								}
+							}
 							add(new SeparatorField());
-							
 							// update the overall detail count
-							foundDetails += foundObs;
+							foundDetails += foundObservations.size();
 						}
 					}
 				}
@@ -81,6 +123,8 @@ public class DetailScreen extends MainScreen
 		
 		if (foundDetails <= 0) {
 			add(new RichTextField("No forecast details found for this date."));
+		} else {
+			add(new RichTextField("")); // kludge so scrolling works
 		}
 		
 	}

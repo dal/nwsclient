@@ -27,14 +27,23 @@ import net.rim.blackberry.api.homescreen.HomeScreen;
 public class BitmapProvider extends Thread
 {
 	
+    private static BitmapProvider _instance = null;
+    
 	private Vector urls;
 	private Vector fields;
 	private Hashtable bitmaps;
 	private Vector homeScreen;
 	
 	private boolean _stop = false;
+    
+    public static BitmapProvider GetInstance()
+    {
+        if (_instance == null)
+            _instance = new BitmapProvider();
+        return _instance;
+    }
 
-	BitmapProvider() 
+	private BitmapProvider() 
 	{
 		urls = new Vector();
 		fields = new Vector();
