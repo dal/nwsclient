@@ -2372,8 +2372,8 @@ public class NwsClient extends UiApplication
 		// bigIcon likely to be true on the Blackberry Storm (72px vs. 48px)
 		boolean bigIcon = (bg.getWidth() > 48); 
 		if (bigIcon) { 
-			lOffset = 36;
-			smallSize = 18;
+			lOffset = 30;
+			smallSize = 26;
 		}
 		FontFamily fontfam[] = FontFamily.getFontFamilies();
 		Font smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, smallSize);
@@ -2385,22 +2385,22 @@ public class NwsClient extends UiApplication
 			temp = temp.substring(0, decPos);
 		}
 		
-		int yPos = (bigIcon) ? 29 : 10;
+		int yPos = (bigIcon) ? 24 : 10;
 		if (temp.length() == 1) {
 			// Single digits!
-			lOffset = (bigIcon) ? 41 : 23;
+			lOffset = (bigIcon) ? 35 : 23;
 		} else if (temp.length() == 3) { 
 			// move to the left if 3 chars long
-			yPos = (bigIcon) ? 32 : 12;
-			lOffset = (bigIcon) ? 32 : 20;
-			smallSize = (bigIcon) ? 16 : 12;
+			yPos = (bigIcon) ? 28 : 12;
+			lOffset = (bigIcon) ? 30 : 20;
+			smallSize = (bigIcon) ? 18 : 12;
 			smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, smallSize);
 		} else if (temp.length() > 3) {
 			// Crazy temperature!
-			yPos = (bigIcon) ? 32 : 12;
-			lOffset = (bigIcon) ? 32: 20;
+			yPos = (bigIcon) ? 28 : 12;
+			lOffset = (bigIcon) ? 30: 20;
 			temp = "err";
-			smallSize = (bigIcon) ? 16 : 12;
+			smallSize = (bigIcon) ? 18 : 12;
 			smallFont = fontfam[0].getFont(FontFamily.SCALABLE_FONT, smallSize);
 		}
 		
