@@ -217,10 +217,10 @@ public class LocationData implements Persistable
 		// Get the area
 		NodeList subAdminList = addressDetails.getElementsByTagName("SubAdministrativeAreaName");
 		NodeList adminList = addressDetails.getElementsByTagName("AdministrativeAreaName");
-		if (subAdminList.getLength() > 0) {
-			setArea( XmlHelper.getNodeText(subAdminList.item(0)) );
-		} else if (adminList.getLength() > 0) {
+		if (adminList.getLength() > 0) {
 			setArea( XmlHelper.getValue(addressDetails, "AdministrativeAreaName") );
+        } else if (subAdminList.getLength() > 0) {
+			setArea( XmlHelper.getNodeText(subAdminList.item(0)) );
 		} else {
 			setArea( "" );
 		}
